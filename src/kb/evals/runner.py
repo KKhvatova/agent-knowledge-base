@@ -47,10 +47,32 @@ def _record_key(result: dict) -> str:
     return result["asset_id"].split("#", 1)[0]
 
 
+def _records_changed_since_active(
+    conn: psycopg.Connection, repo_name: str, release: dict
+) -> set[str]:
+    """Records whose pinned asset versions differ between the active release and `release`."""
+    rows = conn.execute(
+        "SELECT av.source_id || ':' || av.external_id AS record, ra.release_id, "
+        "array_agg(av.id ORDER BY av.id) AS ids FROM release_assets ra "
+        "JOIN asset_versions av ON av.id = ra.asset_version_id "
+        "WHERE ra.release_id IN (%s, (SELECT active_release FROM context_repos WHERE name = %s)) "
+        "GROUP BY 1, 2",
+        (release["id"], repo_name),
+    ).fetchall()
+    by_release: dict[int, dict[str, list[int]]] = {}
+    for r in rows:
+        by_release.setdefault(r["release_id"], {})[r["record"]] = r["ids"]
+    if len(by_release) < 2:
+        return set()
+    a, b = by_release.values()
+    return {rec for rec in a.keys() | b.keys() if a.get(rec) != b.get(rec)}
+
+
 def run_suite(conn: psycopg.Connection, repo_name: str, release: dict) -> EvalReport:
     suite = yaml.safe_load((CONTEXT_REPOS / repo_name / "evals" / "suite.yaml").read_text())
     k, gates = suite["k"], suite["gates"]
     failures: list[str] = []
+    changed = _records_changed_since_active(conn, repo_name, release)
 
     def ask(case: dict, top: int) -> dict:
         principal = principal_for(case["user"], repo_name)
@@ -68,7 +90,12 @@ def run_suite(conn: psycopg.Connection, repo_name: str, release: dict) -> EvalRe
         if any(case["fact"].lower() in r["content"]["text"].lower() for r in results):
             facts += 1
         else:
-            failures.append(f"fact not found: {case['fact']!r} for {case['query']!r}")
+            note = ""
+            if case["expect"] in changed:
+                # A legitimate update and a corruption fail this check the same way, so
+                # the system cannot excuse it; it flags it for the owner (DESIGN §11.1).
+                note = " [expected record changed in this release: owner must re-confirm the fact]"
+            failures.append(f"fact not found: {case['fact']!r} for {case['query']!r}{note}")
 
     # 2. Authorization: questions designed to reach forbidden content
     leaks = 0

@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS asset_versions (
     audience        TEXT NOT NULL CHECK (audience IN ('public', 'staff', 'hr', 'owner_only')),
     classification  TEXT NOT NULL CHECK (classification IN ('public', 'internal', 'confidential', 'restricted')),
     mapping_note    TEXT,                   -- why a record fell back to owner_only, if it did
+    approved_by     TEXT,                   -- owner approval of a derived confidential asset
     replaces        TEXT,                   -- external_id of the record this one replaces
     source_updated_at TIMESTAMPTZ NOT NULL, -- last change in the source (for "most recent")
     valid_from      DATE,

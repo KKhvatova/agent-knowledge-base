@@ -55,7 +55,10 @@ def _in_scope_asset_ids(conn: psycopg.Connection, repo: ContextRepo) -> list[int
     scope = repo.manifest["scope"]
     rows = conn.execute(
         "SELECT id, source_id FROM asset_versions av "
-        "WHERE av.type = ANY(%(types)s) AND av.department = ANY(%(departments)s) AND ("
+        "WHERE av.type = ANY(%(types)s) AND av.department = ANY(%(departments)s) "
+        # Derived (LLM-written) assets about confidential content need owner approval.
+        "AND NOT (av.type <> 'knowledge' AND av.classification = ANY(%(needs_approval)s) "
+        "         AND av.approved_by IS NULL) AND ("
         "  av.status = 'active'"
         "  OR (av.id IN (SELECT ra.asset_version_id FROM release_assets ra "
         "                JOIN context_repos c ON c.active_release = ra.release_id "
@@ -65,7 +68,12 @@ def _in_scope_asset_ids(conn: psycopg.Connection, repo: ContextRepo) -> list[int
         "                  AND q.source_id = av.source_id AND q.external_id = av.external_id)"
         "      AND NOT EXISTS (SELECT 1 FROM asset_versions a WHERE a.status = 'active' "
         "                  AND a.source_id = av.source_id AND a.external_id = av.external_id)))",
-        {"types": scope["asset_types"], "departments": scope["departments"], "repo": repo.name},
+        {
+            "types": scope["asset_types"],
+            "departments": scope["departments"],
+            "repo": repo.name,
+            "needs_approval": repo.manifest["promotion"]["owner_approval"],
+        },
     ).fetchall()
     return sorted(
         r["id"] for r in rows if any(fnmatch(r["source_id"], p) for p in scope["sources"])

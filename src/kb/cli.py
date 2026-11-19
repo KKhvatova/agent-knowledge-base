@@ -63,6 +63,18 @@ def sync(
             )
             for message in s.messages:
                 typer.echo(f"  - {message}")
+        if source is None:
+            from kb.pipeline.derive import derive
+
+            d = derive(conn)
+            typer.echo(f"{'derived (T5)':16} published={d.published} unchanged={d.unchanged}")
+            for pid in d.needs_regeneration:
+                typer.echo(
+                    f"  - {pid}: source changed, procedure is stale and NEEDS "
+                    "REGENERATION (excluded from new releases)"
+                )
+            for pid in d.source_missing:
+                typer.echo(f"  - {pid}: source deleted, procedure withdrawn")
 
 
 @app.command()
