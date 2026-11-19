@@ -330,9 +330,90 @@ sequenceDiagram
 
 ## 4. Data connection
 
-- Connector contract (events / incremental polling / full reconciliation)
-- Handling formats, access methods and ownership
-- Sources that block automated access
+Heterogeneity is absorbed at the edge: every source gets a **connector** that hides its API, format and change model behind one contract. Everything downstream of the connectors sees a single record shape.
+
+### 4.1 The connector contract
+
+Every connector implements the same small interface:
+
+| Operation | Purpose | Required |
+|---|---|---|
+| `changes(cursor)` | Return records changed since a cursor (timestamp, sequence or change token), plus the new cursor | Yes |
+| `fetch(id)` | Return the full content and permissions of one record | Yes |
+| `list_ids()` | Return every record id currently present in the source, used by reconciliation to find deletions | Yes |
+| `subscribe()` | Register a webhook or event subscription, when the source supports it | Optional |
+| `permissions_changed(cursor)` | Return records whose permissions changed, if the source exposes this separately | Optional |
+
+Each connector emits a **source record envelope**, the only shape the rest of the system knows:
+
+```text
+source_id        e.g. "confluence-hr-ca"
+external_id      id in the source system
+source_version   version, etag or revision from the source
+updated_at       last modification time in the source
+deleted          true for a deletion (tombstone)
+content          raw bytes + MIME type
+acl_raw          source permissions, as the source expresses them
+owner            accountable owner (from the source, or from onboarding)
+metadata         source-specific fields (space, folder, record type, …)
+```
+
+Keeping permissions in their **raw** form (`acl_raw`) and translating them later (T3) is deliberate: when a permission mapping is fixed, every record can be re-mapped from the raw snapshot without calling the source again.
+
+### 4.2 Three ways to detect change
+
+No single mechanism is reliable on its own, so every source uses up to three, each catching what the previous one missed:
+
+| Mechanism | When | Latency | What it catches | What it misses |
+|---|---|---|---|---|
+| **Events** (webhooks, CDC) | Sources that push changes: Confluence, Jira, GitHub, Salesforce CDC | Seconds to minutes | Most edits and creations, quickly | Lost or out-of-order events, events never sent for some changes (often permissions) |
+| **Incremental polling** | Every source, on a per-source interval (5 min to 24 h) | Up to the interval | Everything with a reliable `updated_at` or change token | **Deletions** (a deleted record no longer appears in any "changed since" query) |
+| **Full reconciliation** | Every source, nightly or weekly depending on size | Hours | Deletions and anything the other two missed: the set of ids in the source is compared with the set in the raw snapshot | Nothing, but it is expensive, so it runs rarely |
+
+Deletions deserve the extra mechanism because they are the change most often lost, and the most dangerous to miss: a deleted policy that is still served is an *inaccurate* answer, and a deleted document whose access should have ended is an *unauthorized* one.
+
+### 4.3 Processing changes safely
+
+- **Idempotency.** Every change is identified by `(source_id, external_id, source_version)`. Processing the same change twice has no effect, so events can be retried freely.
+- **Ordering.** Changes to the same record are processed in order: the queue is partitioned by record (SQS FIFO with the record id as message group). An older version arriving after a newer one is discarded.
+- **Skipping unchanged content.** A content hash is computed at snapshot time; if it matches the previous version, curation is skipped. Most "updates" from polling are touches that change nothing.
+- **Permission-only changes take a fast path.** When only the permissions changed, the record is re-mapped and its assets updated without re-parsing or re-embedding. This is what makes the ≤ 5 min target for permission changes affordable.
+- **Deletions are two-phase.** A deletion creates a tombstone: the record is immediately excluded from retrieval and its derived assets are invalidated. After a grace period (assumed 7 days) it is hard-deleted everywhere: raw snapshot, assets, embeddings, caches. The grace period allows recovery from mistaken deletions; requests under the right to erasure skip it (§7).
+- **Failures are isolated.** Each source has its own queue, dead-letter queue, retry policy with backoff, and API rate-limit budget. A broken connector delays its own source, never the others.
+
+### 4.4 Formats
+
+Parsing is a registry of parsers keyed by MIME type, all producing the same normalized document model (sections, headings, tables, text, links):
+
+| Format | Approach |
+|---|---|
+| Wiki pages, HTML | Structure-preserving conversion (headings, tables, lists kept) |
+| Office documents, PDFs with text | Layout-aware parsing; tables kept as tables |
+| Scanned PDFs, images | OCR (Amazon Textract), flagged with lower confidence |
+| Structured records (CRM, HRIS, tickets) | Field mapping per record type into a short textual description plus structured fields; most of these are served as live tools or metadata only (§1.2) |
+| Chat (Slack) | Threads as units, not single messages; only channels explicitly opted in by their owners |
+
+A record that fails to parse is not dropped silently: it is kept in the raw snapshot, marked as failed, counted in the connector's error metrics, and visible to the observer agent.
+
+### 4.5 Access to the sources
+
+- **Least privilege.** Each connector uses its own read-only service account, scoped to what was agreed at onboarding. Credentials live in AWS Secrets Manager and are rotated.
+- **The connector account sees more than most users.** This is unavoidable, since it must read everything it indexes. It is why permissions are copied with every record and enforced at query time, and why the raw snapshot is encrypted and readable only by the pipeline.
+- **No bypassing access controls.** Some sources block automated access (the public ShopFully website, for instance, sits behind a bot-protection layer). The right integration is the CMS API or an export agreed with its owner, never circumventing the protection.
+
+### 4.6 Onboarding a new source
+
+Adding a source is a short, repeatable process, done together with its owner:
+
+1. **Ownership:** a named, accountable owner.
+2. **Index or live:** decided with the four criteria of §1.2, per record type.
+3. **Permission mapping:** written, tested ("user X sees A, not B"), and approved by the owner; anything uncertain falls back to owner-only.
+4. **Authority rules:** for which topics this source wins over others, if any.
+5. **Freshness target and sync mechanisms:** which of the three mechanisms apply, and at what intervals.
+6. **Circuit-breaker thresholds:** calibrated on the source's historical change rate.
+7. **Golden questions:** a few questions this source must answer, added to the evaluation suite.
+
+The connector is code; everything else is configuration stored and versioned with it.
 
 ## 5. Knowledge representation
 
