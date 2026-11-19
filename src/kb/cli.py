@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import typer
 
+from kb.authz.identity import issue_token
 from kb.config import load_sources
 from kb.pipeline.sync import sync_source
+from kb.store import releases
 from kb.store.db import connect, init_schema, reset_schema
+from kb.store.releases import ContextRepo
 
 app = typer.Typer(help="Agent Knowledge Base POC", no_args_is_help=True)
 
@@ -78,6 +81,76 @@ def status() -> None:
             f"{r['source_id']:16} records={r['records']:3} active_assets={r['assets']:3} "
             f"frozen={r['frozen']} last_sync={r['last_sync_at']:%Y-%m-%d %H:%M:%S}"
         )
+
+
+repo_app = typer.Typer(help="Inspect and roll back Context Repo releases.", no_args_is_help=True)
+app.add_typer(repo_app, name="repo")
+
+
+@app.command()
+def release(repo: str = "hr-assistant") -> None:
+    """Build a candidate release of a Context Repo and promote it.
+
+    Evaluation gate: added in the next step; until then candidates are promoted directly.
+    """
+    with connect() as conn:
+        candidate = releases.build_candidate(conn, ContextRepo.load(repo), created_by="cli")
+        if candidate is None:
+            typer.echo("Nothing changed since the active release.")
+            return
+        releases.promote(conn, candidate, {"summary": "no eval gate yet"}, actor="cli")
+        conn.commit()
+        typer.echo(f"{repo}: release r{candidate['number']} promoted.")
+
+
+@repo_app.command("log")
+def repo_log(repo: str = "hr-assistant") -> None:
+    """List releases of a Context Repo."""
+    with connect() as conn:
+        for r in releases.log(conn, repo):
+            marker = "*" if r["active"] else " "
+            typer.echo(
+                f"{marker} r{r['number']:<3} {r['status']:12} {r['assets']:3} assets  "
+                f"{r['created_at']:%Y-%m-%d %H:%M}  by {r['created_by']}  evals: {r['evals']}"
+            )
+
+
+@repo_app.command("diff")
+def repo_diff(a: int, b: int, repo: str = "hr-assistant") -> None:
+    """Show assets added, removed and changed between two releases."""
+    with connect() as conn:
+        d = releases.diff(conn, repo, a, b)
+    for kind, items in d.items():
+        typer.echo(f"{kind} ({len(items)}):")
+        for item in items:
+            typer.echo(f"  {item}")
+
+
+@repo_app.command("rollback")
+def repo_rollback(
+    to: int = typer.Option(None, help="Release number; default: the previous one."),
+    repo: str = "hr-assistant",
+    reason: str = "manual rollback",
+) -> None:
+    """Move the active pointer back to an earlier release."""
+    with connect() as conn:
+        target = releases.rollback(conn, repo, to, actor="cli", reason=reason)
+        conn.commit()
+    typer.echo(f"{repo}: active release is now r{target['number']}.")
+
+
+@app.command()
+def token(email: str, agent: str = "hr-assistant") -> None:
+    """Issue a demo token for a user, bound to an agent (Context Repo)."""
+    typer.echo(issue_token(email, agent))
+
+
+@app.command()
+def serve() -> None:
+    """Run the MCP server (HTTP on 127.0.0.1:8765, or stdio with KB_MCP_TRANSPORT=stdio)."""
+    from kb.mcp_server.server import main as serve_main
+
+    serve_main()
 
 
 if __name__ == "__main__":

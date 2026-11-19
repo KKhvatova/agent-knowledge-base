@@ -139,6 +139,7 @@ concordandoli con il proprio responsabile.</p>
         "version": 1,
         "updated": "2026-11-05T09:00:00Z",
         "valid_from": "2027-01-01",
+        "replaces": "1004",
         "body": """
 <h1>Smart working – Italia (dal 2027)</h1>
 <p>Dal <strong>1° gennaio 2027</strong> sostituisce la policy precedente.</p>
@@ -630,7 +631,9 @@ def write_confluence(out: Path) -> None:
                 "language": page["language"],
                 # Custom page properties, as an HR team might maintain them.
                 "properties": {
-                    k: page[k] for k in ("classification", "valid_from", "valid_to") if k in page
+                    k: page[k]
+                    for k in ("classification", "valid_from", "valid_to", "replaces")
+                    if k in page
                 },
             },
             "restrictions": {"read": {"groups": page["read_groups"]}},

@@ -16,7 +16,8 @@
     ],
     "language": "it",
     "properties": {
-      "valid_from": "2027-01-01"
+      "valid_from": "2027-01-01",
+      "replaces": "1004"
     }
   },
   "restrictions": {

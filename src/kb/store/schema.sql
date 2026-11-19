@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS asset_versions (
     audience        TEXT NOT NULL CHECK (audience IN ('public', 'staff', 'hr', 'owner_only')),
     classification  TEXT NOT NULL CHECK (classification IN ('public', 'internal', 'confidential', 'restricted')),
     mapping_note    TEXT,                   -- why a record fell back to owner_only, if it did
+    replaces        TEXT,                   -- external_id of the record this one replaces
     valid_from      DATE,
     valid_to        DATE,
     last_synced     TIMESTAMPTZ NOT NULL,
@@ -81,6 +82,8 @@ CREATE TABLE IF NOT EXISTS releases (
     status          TEXT NOT NULL CHECK (status IN ('candidate', 'promoted', 'rejected', 'rolled_back')),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_by      TEXT NOT NULL,
+    manifest        JSONB NOT NULL,         -- pinned with the release (DESIGN.md §5.5)
+    instructions    TEXT NOT NULL,          -- the agent's prompt, pinned with the release
     eval_report     JSONB,
     note            TEXT,
     UNIQUE (context_repo, number)

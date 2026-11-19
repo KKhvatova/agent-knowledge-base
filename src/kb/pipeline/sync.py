@@ -154,6 +154,7 @@ def _process(
 
     old_raw_ids = _supersede(conn, record)
     _build_knowledge_assets(conn, record, source, attrs, raw_id)
+    _update_permissions(conn, record, attrs, raw_id=None)  # also older, still-pinned versions
     _mark_derived_stale(conn, old_raw_ids)
     if current is None:
         stats.created += 1
@@ -193,24 +194,33 @@ def _snapshot(conn: psycopg.Connection, record: SourceRecord, body_hash: str, ac
 
 
 def _update_permissions(
-    conn: psycopg.Connection, record: SourceRecord, attrs: AccessAttrs, raw_id: int
+    conn: psycopg.Connection, record: SourceRecord, attrs: AccessAttrs, raw_id: int | None
 ) -> None:
+    """Apply the record's current permissions to ALL its asset versions.
+
+    Permissions belong to the record, not to a version: an older version may still be
+    pinned by the active release, and it must not keep permissions that were revoked.
+    """
     conn.execute(
         "UPDATE asset_versions SET audience = %s, country = %s, classification = %s, "
-        "owner = %s, mapping_note = %s, provenance = array_append(provenance, %s), "
-        "last_synced = now() "
-        "WHERE source_id = %s AND external_id = %s AND status = 'active'",
+        "owner = %s, mapping_note = %s, last_synced = now() "
+        "WHERE source_id = %s AND external_id = %s",
         (
             attrs.audience,
             attrs.country,
             attrs.classification,
             attrs.owner,
             attrs.note,
-            raw_id,
             record.source_id,
             record.external_id,
         ),
     )
+    if raw_id is not None:  # permission-only change: record the new raw version as provenance
+        conn.execute(
+            "UPDATE asset_versions SET provenance = array_append(provenance, %s) "
+            "WHERE source_id = %s AND external_id = %s AND status = 'active'",
+            (raw_id, record.source_id, record.external_id),
+        )
 
 
 def _supersede(conn: psycopg.Connection, record: SourceRecord) -> list[int]:
@@ -261,9 +271,9 @@ def _build_knowledge_assets(
         conn.execute(
             "INSERT INTO asset_versions (asset_id, version, type, source_id, external_id, "
             "provenance, title, section_path, content, url, language, owner, department, "
-            "country, audience, classification, mapping_note, valid_from, valid_to, "
+            "country, audience, classification, mapping_note, replaces, valid_from, valid_to, "
             "last_synced, embedding) VALUES "
-            "(%s,%s,'knowledge',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),%s)",
+            "(%s,%s,'knowledge',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),%s)",
             (
                 asset_id,
                 version,
@@ -281,6 +291,7 @@ def _build_knowledge_assets(
                 attrs.audience,
                 attrs.classification,
                 attrs.note,
+                record.metadata.get("replaces"),
                 _date(record.metadata.get("valid_from")),
                 _date(record.metadata.get("valid_to")),
                 vector,
@@ -305,8 +316,9 @@ def _tombstone(
     if not updated:
         return
     conn.execute(
+        # Every version, not only the latest: an older one may still be pinned by a release.
         "UPDATE asset_versions SET status = 'tombstoned' "
-        "WHERE source_id = %s AND external_id = %s AND status = 'active'",
+        "WHERE source_id = %s AND external_id = %s AND status <> 'quarantined'",
         (source_id, external_id),
     )
     raw_ids = [

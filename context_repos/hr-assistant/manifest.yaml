@@ -1,0 +1,26 @@
+# Context Repo: everything the HR assistant knows and can do, in a given release
+# (DESIGN.md §5.5). Changing this file, the prompt or the tool descriptions creates a
+# new release, which goes through the evals like any content change.
+
+context_repo: hr-assistant
+owner: people-platform-team@shopfully.example
+description: Answers employee questions on HR policies, benefits and procedures.
+
+scope:                       # strict: the agent can never retrieve outside it
+  departments: [people]
+  asset_types: [knowledge, procedure, example, memory]
+  sources: [confluence-hr, drive-benefits, hris-policies]
+
+tools: [search_knowledge, get_asset, get_leave_balance, context_info]
+
+instructions: prompts/system.md
+
+retrieval:
+  top_k: 6
+  candidates_per_method: 20  # hybrid search: vector and keyword, fused with RRF
+
+evals: evals/
+
+promotion:
+  auto: [public, internal]               # promoted automatically when evals pass
+  owner_approval: [confidential, restricted]  # applies to LLM-derived assets (§1.2)
