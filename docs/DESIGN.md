@@ -231,7 +231,81 @@ flowchart LR
 
 ### 3.3 Data flow walkthrough
 
-_TODO: from a policy edit in a source to an agent answer_
+**Scenario.** The HR owner for Canada edits the leave policy in Confluence, raising vacation from 15 to 18 days. Shortly after, an employee in Toronto asks the HR assistant: *"How many vacation days do I have left?"*
+
+The answer needs two different kinds of data: the **policy** (indexed knowledge, changed a minute ago) and the employee's **personal balance** (volatile and personal, read live from the HRIS).
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Owner as HR owner (CA)
+  participant CF as Confluence
+  participant ING as Ingestion<br/>EventBridge + connector
+  participant RAW as Raw Snapshot (S3)
+  participant CUR as Curation pipeline
+  participant DB as Asset store (Aurora)
+  participant GATE as Release gate
+  actor Emp as Employee (Toronto)
+  participant AG as HR assistant
+  participant MCP as MCP server
+  participant AUTH as Identity + Cedar
+  participant HRIS as HRIS (Workday)
+
+  rect rgba(120,120,120,0.08)
+  Note over Owner,GATE: Write path: from source change to a new Context Repo release (target ≤ 15 min)
+  Owner->>CF: Edits "Vacation policy – Canada" (15 → 18 days)
+  CF-)ING: page_updated webhook
+  ING->>CF: Fetch page content + page restrictions
+  ING->>RAW: T1 Store new raw version (hash changed, ACL copied)
+  RAW-)CUR: New raw version event
+  CUR->>CUR: T2 Parse · T3 Enrich (country = CA, classification = internal)
+  CUR->>DB: T4 New Knowledge asset version (chunks + embeddings)
+  CUR->>DB: Invalidate derived "How to request vacation (CA)" (provenance points to old raw version)
+  CUR->>DB: T5 Regenerate derived procedure from the new version
+  DB->>GATE: Candidate release r13 of hr-assistant
+  GATE->>GATE: Golden set + ACL leakage + freshness checks, no circuit breaker fired
+  alt Evals pass and source is internal
+    GATE->>DB: T6 Promote r13 to active (r12 kept for rollback)
+  else Evals fail
+    GATE->>DB: Keep r12 active, open review for the owner
+  end
+  end
+
+  rect rgba(120,120,120,0.08)
+  Note over Emp,HRIS: Read path: one question, two data sources (target p95 < 800 ms for retrieval)
+  Emp->>AG: "How many vacation days do I have left?"
+  AG->>MCP: search_knowledge("vacation entitlement") with user token
+  MCP->>AUTH: Exchange token on behalf of employee, load attributes (country = CA, role = employee)
+  MCP->>DB: Hybrid search in hr-assistant r13, filtered by Cedar policy
+  DB-->>MCP: CA vacation policy v7 (18 days), citation + valid_from + last_synced
+  AG->>MCP: get_leave_balance() with user token
+  MCP->>AUTH: Is employee allowed to read their own balance?
+  AUTH-->>MCP: Allow (self only)
+  MCP->>HRIS: Live read as the employee (not indexed)
+  HRIS-->>MCP: 18 entitled, 11 taken
+  MCP-->>AG: Results with citations, versions, freshness
+  AG-->>Emp: "You have 7 days left (18 under the Canada policy, updated today, minus 11 taken). Source: Vacation policy – Canada, v7."
+  end
+```
+
+**What each step demonstrates:**
+
+| Steps | Requirement | What happens |
+|---|---|---|
+| 1–5 | *Current* | The change is pushed by a webhook, not discovered by a nightly job. The content hash changed, so the document is reprocessed; unchanged documents are skipped. |
+| 3–4 | *Authorized* | The page restrictions are copied together with the content, in the same version. |
+| 8–9 | *Accurate* | The procedure derived from the old version is invalidated through provenance, so the agent can never mix "15 days" from a stale summary with "18 days" from the new policy. |
+| 10–13 | *Self-maintenance* | The new release is promoted automatically because the evals pass and the source is internal. Release r12 stays available for an instant rollback. |
+| 15–18 | *Authorized* | The search runs on behalf of the employee: Canadian policies only, inside the HR assistant's scope only. |
+| 19–23 | *Authorized + current* | The personal balance is never indexed. It is read live, and only the employee's own record is allowed. |
+| 24–25 | *Accurate* | The answer carries the citation, version and freshness, so the user can verify it and the evals can measure it. |
+
+**What if things go wrong along the way:**
+
+- **The webhook is lost.** Incremental polling picks up the change within its interval, and the nightly reconciliation catches anything both missed. The freshness metric for Confluence-CA shows the delay.
+- **The evals fail on r13.** The employee still gets an answer from r12, with the *old* policy and its date, which is clearly visible in the citation. The observer agent is notified (§8).
+- **The HRIS is down.** `get_leave_balance` returns an explicit error. The agent can still answer the policy part ("you are entitled to 18 days") and say that it cannot read the balance right now, instead of guessing.
+- **The employee asks between the edit and the promotion.** They get the previous version with its `last_synced` timestamp. This window is the propagation lag defined in §1.1.
 
 ## 4. Data connection
 
