@@ -417,10 +417,130 @@ The connector is code; everything else is configuration stored and versioned wit
 
 ## 5. Knowledge representation
 
-- Curated asset types: Knowledge, Procedures, Tools, Examples, Memories
-- Mandatory metadata: owner, department, ACL, classification, jurisdiction, validity, version, provenance
-- Entity layer (shared cross-department entities)
-- Context Repos: per-workflow versioned manifests
+Knowledge from different departments is modelled at three levels: **assets** (what agents consume), **entities** (what relates assets across departments) and **Context Repos** (what a given agent is given). All three are versioned.
+
+### 5.1 Curated assets
+
+An asset is the smallest unit an agent receives. There are five types:
+
+| Type | What it is | Produced by | Example |
+|---|---|---|---|
+| **Knowledge** | A section-aware chunk, faithful to its source | Curation (T4), deterministic | The "Vacation" section of the Canada leave policy |
+| **Procedure** | Step-by-step instructions derived from one or more Knowledge assets | LLM (T5), eval-gated | "How to request vacation in Canada: 1… 2… 3…" |
+| **Tool** | The contract of a live tool: description, inputs, outputs, required permissions | Written by the team that owns the integration | `get_leave_balance()` |
+| **Example** | A validated question–answer pair | Curated from evals and approved feedback | "How many vacation days do I get in Canada?" → answer + citation |
+| **Memory** | A *shared* learning from interactions, never per user | Proposed by the observer agent from feedback and traces, eval-gated | "Users say *PTO* for what the policy calls *vacation*"; "frequent question with no answer: parental leave in Brazil" |
+
+Per-user memory (what a single user said in previous conversations) is deliberately **out of scope**: it belongs to the agent runtime (e.g. AgentCore Memory), not to a shared knowledge base. Shared Memories respect the rule of §2.3: agents never write knowledge directly; the observer *proposes*, the release gate *verifies*, and only then is it published.
+
+Every asset, regardless of type, carries the same **mandatory metadata**. An asset missing any of these is rejected, never indexed with defaults:
+
+| Field | Purpose |
+|---|---|
+| `asset_id`, `version` | Stable identity across versions; versions are append-only |
+| `type` | One of the five types above |
+| `owner`, `department` | Accountability; who receives tickets about this asset |
+| `policy_attrs` | Attributes used by Cedar: country, department, role scope, classification |
+| `classification` | public / internal / confidential / restricted; drives the review rule of §1.2 |
+| `jurisdiction`, `language` | Residency (§2.2) and multilingual retrieval |
+| `valid_from`, `valid_to` | Business validity of the content (§5.4) |
+| `provenance` | The raw source versions this asset was built from |
+| `last_synced`, `last_verified` | Freshness, shown to agents and monitored |
+
+### 5.2 Versioning and provenance
+
+- **Append-only.** A change never overwrites an asset: it creates a new version. Old versions remain readable for audit, for citations in past answers, and for rollback.
+- **Provenance links every asset to the raw versions it was built from.** A Knowledge asset points to one raw version; a Procedure may point to several (for example, the leave policy and the HR portal guide).
+- **Invalidation cascades through provenance.** When a raw version is superseded or deleted, every asset derived from it is marked stale and excluded from new releases until it is regenerated and passes the evals. This is what prevents a stale summary from contradicting the current policy (§3.3, steps 8–9).
+
+```mermaid
+erDiagram
+  RAW_VERSION ||--o{ ASSET_VERSION : "provenance"
+  ASSET ||--|{ ASSET_VERSION : "has versions"
+  ASSET_VERSION }o--o{ ENTITY : "mentions / is about"
+  CONTEXT_REPO ||--|{ RELEASE : "has releases"
+  RELEASE }o--o{ ASSET_VERSION : "pins"
+  CONTEXT_REPO ||--o| RELEASE : "active pointer"
+  ENTITY ||--o{ ENTITY_ALIAS : "known as"
+  ENTITY }o--o{ ENTITY : "related to"
+```
+
+### 5.3 Entity layer: relating departments
+
+Departments describe the same things in different systems: a customer is an *Account* in Salesforce, a *reporter* in Jira and a *counterparty* in NetSuite. The entity layer gives these shared things one identity, so that assets from different departments can be related.
+
+**A small, canonical set of entities**, each with a single system of record:
+
+| Entity | System of record | Used for |
+|---|---|---|
+| Employee | HRIS | Ownership, "my" questions, manager relationships for Cedar |
+| Team / Department | IdP and HRIS | Ownership, policy attributes |
+| Country / Legal entity | HRIS and Finance | Jurisdiction, country-specific policies |
+| Product | Product catalogue | Roadmap agent: linking Sales feedback, Engineering work, Product plans |
+| Customer | CRM | Roadmap agent: linking opportunities, tickets, contracts |
+
+**Linking assets to entities:**
+
+- **Deterministic first.** When a record carries an explicit id (a Jira issue with a product component, an opportunity with an account id), the link is exact.
+- **LLM second.** When an entity is only mentioned in text ("customers in Canada asked for…"), an LLM proposes the link with a confidence score, matched against the entity's known aliases. Low-confidence links are used for ranking only, never for authorization or conflict detection.
+
+**What the entity layer enables:** conflict detection (§1.2) compares only assets about the same entity; cross-department questions ("what did Sales hear about Product X, and what is Engineering doing about it?") become a join instead of a hope; filters such as "policies for Canada" are exact.
+
+**What it is not:** a full knowledge graph. Relationships are few and explicit (employee–team, team–department, product–team, customer–product), stored as relational tables, and queried with ordinary SQL. A graph database would be reconsidered if agents start needing multi-hop questions over many relationship types (for example, "engineers working on products used by customers with critical tickets"); §9 explains why it is excluded for now.
+
+### 5.4 Time: validity is not the same as version
+
+Two different clocks are tracked for every asset:
+
+- **Version time**: when the content changed in the source (`source_version`, `last_synced`). It answers *"what is the latest text?"*
+- **Business validity**: when the content applies in the real world (`valid_from`, `valid_to`). It answers *"what rule is in force?"*
+
+They often differ. A new leave policy published in November and valid from 1 January is the latest *version* but not yet the rule in *force*. Retrieval therefore:
+
+- serves what is **valid today** by default;
+- accepts an `as_of` date for questions about the future or the past ("what will apply in January?", "what applied when I was hired?");
+- tells the agent when a **future version already exists**, so it can say "this changes on 1 January".
+
+Without this, an agent would answer in November with a rule that is not yet in force: an accuracy error that no freshness metric would ever catch.
+
+### 5.5 Context Repos
+
+A Context Repo is everything a given agent knows and can do, in a given version. It is a manifest, versioned through releases:
+
+```yaml
+context_repo: hr-assistant
+owner: people-platform-team
+description: Answers employee questions on HR policies, benefits and procedures.
+
+scope:                      # strict: the agent can never retrieve outside it
+  departments: [people]
+  asset_types: [knowledge, procedure, example, memory]
+  sources: [confluence-hr-*, sharepoint-benefits-*, web-careers]
+
+tools: [get_leave_balance, get_my_benefits_enrollment]
+
+instructions: prompts/hr-assistant/system.md   # versioned with the release
+
+retrieval:
+  hybrid: { vector_weight: 0.6, keyword_weight: 0.4 }
+  top_k: 8
+  default_validity: today
+
+evals: evals/hr-assistant/                       # golden set, ACL leakage, freshness
+promotion:
+  auto: [public, internal]                       # promoted when evals pass
+  owner_approval: [confidential, restricted]     # §1.2
+```
+
+- **A release pins exact asset versions**, plus the versions of the instructions and tool contracts. Agent behaviour is fully reproducible: for any past answer we can say which release, which assets, which prompt.
+- **Instructions and tool descriptions live in the Context Repo**, not in the agent's code. A prompt change can break an agent as badly as a wrong document, so it follows the same cycle: new release, evals, promotion, rollback.
+- **Releases are cheap.** A release is a list of references, not a copy of content. New releases are created automatically when assets in scope change (§7), and rollback is moving the active pointer.
+
+### 5.6 Retrieval units
+
+- **Section-aware chunks.** Documents are split along their own structure (headings, list items, table rows grouped by header), not at fixed sizes, so a chunk is a meaningful, citable unit.
+- **Parent context.** Each chunk knows its document and section path ("Leave policy – Canada › Vacation › Carry-over"), which is returned with it, so the agent understands where a fragment comes from.
+- **Hybrid index.** Every Knowledge asset has a dense vector (multilingual embeddings) and a full-text index. Vector search finds paraphrases; keyword search finds exact terms such as policy codes, product names and acronyms that embeddings handle poorly.
 
 ## 6. Agent access
 
