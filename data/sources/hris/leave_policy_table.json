@@ -1,0 +1,23 @@
+[
+  {
+    "country": "IT",
+    "leave_type": "vacation",
+    "days_per_year": 26,
+    "effective_from": "2026-01-01",
+    "updated_at": "2026-01-05T08:00:00Z"
+  },
+  {
+    "country": "CA",
+    "leave_type": "vacation",
+    "days_per_year": 15,
+    "effective_from": "2026-01-01",
+    "updated_at": "2026-01-05T08:00:00Z"
+  },
+  {
+    "country": "US",
+    "leave_type": "vacation",
+    "days_per_year": 15,
+    "effective_from": "2026-01-01",
+    "updated_at": "2026-10-01T08:00:00Z"
+  }
+]

@@ -1,0 +1,30 @@
+{
+  "id": "9002",
+  "type": "page",
+  "title": "Code of Conduct",
+  "space": {
+    "key": "HR-GLOBAL"
+  },
+  "version": {
+    "number": 3,
+    "when": "2025-10-01T10:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "conduct",
+      "global"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "all-staff"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/9002"
+  }
+}

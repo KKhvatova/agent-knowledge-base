@@ -1,0 +1,32 @@
+{
+  "id": "1003",
+  "type": "page",
+  "title": "Congedo parentale – Italia",
+  "space": {
+    "key": "HR-IT"
+  },
+  "version": {
+    "number": 3,
+    "when": "2026-01-20T09:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "parental-leave",
+      "italy"
+    ],
+    "language": "it",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-it",
+        "hr-it",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/1003"
+  }
+}

@@ -29,6 +29,7 @@ dev = [
     "ruff>=0.6",
     "pre-commit>=3.8",
     "commitizen>=3.29",
+    "fpdf2>=2.9.0",
 ]
 
 [build-system]

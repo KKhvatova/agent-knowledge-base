@@ -1,0 +1,32 @@
+{
+  "id": "2004",
+  "type": "page",
+  "title": "Hybrid Work – Canada",
+  "space": {
+    "key": "HR-CA"
+  },
+  "version": {
+    "number": 2,
+    "when": "2025-08-20T14:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "remote-work",
+      "canada"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-ca",
+        "hr-ca",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/2004"
+  }
+}

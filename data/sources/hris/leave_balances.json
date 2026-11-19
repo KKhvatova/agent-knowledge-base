@@ -1,0 +1,30 @@
+[
+  {
+    "employee_id": "E001",
+    "year": 2026,
+    "leave_type": "vacation",
+    "entitled": 26,
+    "taken": 14
+  },
+  {
+    "employee_id": "E002",
+    "year": 2026,
+    "leave_type": "vacation",
+    "entitled": 15,
+    "taken": 11
+  },
+  {
+    "employee_id": "E003",
+    "year": 2026,
+    "leave_type": "vacation",
+    "entitled": 15,
+    "taken": 9
+  },
+  {
+    "employee_id": "E004",
+    "year": 2026,
+    "leave_type": "vacation",
+    "entitled": 26,
+    "taken": 20
+  }
+]

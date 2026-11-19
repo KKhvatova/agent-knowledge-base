@@ -1,0 +1,32 @@
+{
+  "id": "2001",
+  "type": "page",
+  "title": "Vacation and Time Off – Canada",
+  "space": {
+    "key": "HR-CA"
+  },
+  "version": {
+    "number": 6,
+    "when": "2026-01-15T14:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "leave",
+      "canada"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-ca",
+        "hr-ca",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/2001"
+  }
+}

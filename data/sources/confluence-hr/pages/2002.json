@@ -1,0 +1,32 @@
+{
+  "id": "2002",
+  "type": "page",
+  "title": "Sick Leave – Canada",
+  "space": {
+    "key": "HR-CA"
+  },
+  "version": {
+    "number": 2,
+    "when": "2025-09-10T14:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "sick-leave",
+      "canada"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-ca",
+        "hr-ca",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/2002"
+  }
+}

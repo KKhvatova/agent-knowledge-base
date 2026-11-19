@@ -1,0 +1,68 @@
+[
+  {
+    "id": "drv-it-welfare",
+    "name": "Welfare aziendale 2026 - Italia.pdf",
+    "mimeType": "application/pdf",
+    "modifiedTime": "2026-01-08T08:00:00Z",
+    "permissions": [
+      {
+        "type": "group",
+        "emailAddress": "staff-it@groups.example",
+        "role": "reader"
+      },
+      {
+        "type": "group",
+        "emailAddress": "hr-it@groups.example",
+        "role": "reader"
+      }
+    ],
+    "properties": {
+      "language": "it"
+    },
+    "webViewLink": "https://drive.example/file/drv-it-welfare"
+  },
+  {
+    "id": "drv-ca-benefits",
+    "name": "Benefits Guide 2026 - Canada.pdf",
+    "mimeType": "application/pdf",
+    "modifiedTime": "2026-01-12T08:00:00Z",
+    "permissions": [
+      {
+        "type": "group",
+        "emailAddress": "staff-ca@groups.example",
+        "role": "reader"
+      },
+      {
+        "type": "group",
+        "emailAddress": "hr-ca@groups.example",
+        "role": "reader"
+      }
+    ],
+    "properties": {
+      "language": "en"
+    },
+    "webViewLink": "https://drive.example/file/drv-ca-benefits"
+  },
+  {
+    "id": "drv-us-benefits",
+    "name": "Benefits Overview 2026 - United States.pdf",
+    "mimeType": "application/pdf",
+    "modifiedTime": "2026-01-12T08:00:00Z",
+    "permissions": [
+      {
+        "type": "group",
+        "emailAddress": "staff-us@groups.example",
+        "role": "reader"
+      },
+      {
+        "type": "group",
+        "emailAddress": "hr-us@groups.example",
+        "role": "reader"
+      }
+    ],
+    "properties": {
+      "language": "en"
+    },
+    "webViewLink": "https://drive.example/file/drv-us-benefits"
+  }
+]

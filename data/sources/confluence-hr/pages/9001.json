@@ -1,0 +1,30 @@
+{
+  "id": "9001",
+  "type": "page",
+  "title": "Travel and Expenses Policy",
+  "space": {
+    "key": "HR-GLOBAL"
+  },
+  "version": {
+    "number": 7,
+    "when": "2026-05-05T10:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "expenses",
+      "global"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "all-staff"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/9001"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "id": "2003",
+  "type": "page",
+  "title": "Parental Leave – Canada",
+  "space": {
+    "key": "HR-CA"
+  },
+  "version": {
+    "number": 3,
+    "when": "2026-03-01T14:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "parental-leave",
+      "canada"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-ca",
+        "hr-ca",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/2003"
+  }
+}

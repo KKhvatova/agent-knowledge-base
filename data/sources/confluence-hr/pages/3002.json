@@ -1,0 +1,32 @@
+{
+  "id": "3002",
+  "type": "page",
+  "title": "Sick Leave – United States",
+  "space": {
+    "key": "HR-US"
+  },
+  "version": {
+    "number": 1,
+    "when": "2025-07-01T15:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "sick-leave",
+      "united-states"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-us",
+        "hr-us",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/3002"
+  }
+}

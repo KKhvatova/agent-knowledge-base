@@ -1,0 +1,155 @@
+[
+  {
+    "id": "E001",
+    "name": "Giulia Rossi",
+    "email": "giulia.rossi@shopfully.example",
+    "country": "IT",
+    "office": "Milan",
+    "department": "product",
+    "role": "employee",
+    "manager_id": "E010"
+  },
+  {
+    "id": "E002",
+    "name": "Liam Chen",
+    "email": "liam.chen@flipp.example",
+    "country": "CA",
+    "office": "Toronto",
+    "department": "engineering",
+    "role": "employee",
+    "manager_id": "E011"
+  },
+  {
+    "id": "E003",
+    "name": "Emma Johnson",
+    "email": "emma.johnson@flipp.example",
+    "country": "US",
+    "office": "New York",
+    "department": "sales",
+    "role": "employee",
+    "manager_id": "E012"
+  },
+  {
+    "id": "E004",
+    "name": "Marco Bianchi",
+    "email": "marco.bianchi@shopfully.example",
+    "country": "IT",
+    "office": "Milan",
+    "department": "people",
+    "role": "hr",
+    "hr_scope": "global",
+    "manager_id": null
+  },
+  {
+    "id": "E010",
+    "name": "Francesca Conti",
+    "email": "francesca.conti@shopfully.example",
+    "country": "IT",
+    "office": "Milan",
+    "department": "product",
+    "role": "employee",
+    "manager_id": null
+  },
+  {
+    "id": "E011",
+    "name": "Noah Tremblay",
+    "email": "noah.tremblay@flipp.example",
+    "country": "CA",
+    "office": "Toronto",
+    "department": "engineering",
+    "role": "employee",
+    "manager_id": null
+  },
+  {
+    "id": "E012",
+    "name": "Olivia Smith",
+    "email": "olivia.smith@flipp.example",
+    "country": "US",
+    "office": "New York",
+    "department": "sales",
+    "role": "employee",
+    "manager_id": null
+  },
+  {
+    "id": "E013",
+    "name": "Luca Ferrari",
+    "email": "luca.ferrari@shopfully.example",
+    "country": "IT",
+    "office": "Milan",
+    "department": "engineering",
+    "role": "employee",
+    "manager_id": "E010"
+  },
+  {
+    "id": "E014",
+    "name": "Sofia Ricci",
+    "email": "sofia.ricci@shopfully.example",
+    "country": "IT",
+    "office": "Milan",
+    "department": "sales",
+    "role": "employee",
+    "manager_id": "E010"
+  },
+  {
+    "id": "E015",
+    "name": "Ava Martin",
+    "email": "ava.martin@flipp.example",
+    "country": "CA",
+    "office": "Toronto",
+    "department": "product",
+    "role": "employee",
+    "manager_id": "E011"
+  },
+  {
+    "id": "E016",
+    "name": "Ethan Roy",
+    "email": "ethan.roy@flipp.example",
+    "country": "CA",
+    "office": "Toronto",
+    "department": "people",
+    "role": "hr",
+    "hr_scope": "country",
+    "manager_id": null
+  },
+  {
+    "id": "E017",
+    "name": "Mia Brown",
+    "email": "mia.brown@flipp.example",
+    "country": "US",
+    "office": "New York",
+    "department": "people",
+    "role": "hr",
+    "hr_scope": "country",
+    "manager_id": null
+  },
+  {
+    "id": "E018",
+    "name": "James Wilson",
+    "email": "james.wilson@flipp.example",
+    "country": "US",
+    "office": "New York",
+    "department": "engineering",
+    "role": "employee",
+    "manager_id": "E012"
+  },
+  {
+    "id": "E019",
+    "name": "Chiara Romano",
+    "email": "chiara.romano@shopfully.example",
+    "country": "IT",
+    "office": "Milan",
+    "department": "finance",
+    "role": "employee",
+    "manager_id": null
+  },
+  {
+    "id": "E020",
+    "name": "Benjamin Lee",
+    "email": "benjamin.lee@flipp.example",
+    "country": "CA",
+    "office": "Toronto",
+    "department": "finance",
+    "role": "employee",
+    "manager_id": null
+  }
+]

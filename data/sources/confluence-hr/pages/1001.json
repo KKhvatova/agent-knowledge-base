@@ -1,0 +1,32 @@
+{
+  "id": "1001",
+  "type": "page",
+  "title": "Ferie e permessi – Italia",
+  "space": {
+    "key": "HR-IT"
+  },
+  "version": {
+    "number": 4,
+    "when": "2026-02-10T09:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "leave",
+      "italy"
+    ],
+    "language": "it",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-it",
+        "hr-it",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/1001"
+  }
+}

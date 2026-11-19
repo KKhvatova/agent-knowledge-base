@@ -1,0 +1,32 @@
+{
+  "id": "3004",
+  "type": "page",
+  "title": "Hybrid Work – United States",
+  "space": {
+    "key": "HR-US"
+  },
+  "version": {
+    "number": 1,
+    "when": "2025-06-15T15:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "remote-work",
+      "united-states"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-us",
+        "hr-us",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/3004"
+  }
+}

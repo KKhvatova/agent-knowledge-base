@@ -1,0 +1,32 @@
+{
+  "id": "1002",
+  "type": "page",
+  "title": "Malattia – Italia",
+  "space": {
+    "key": "HR-IT"
+  },
+  "version": {
+    "number": 2,
+    "when": "2025-11-03T09:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "sick-leave",
+      "italy"
+    ],
+    "language": "it",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-it",
+        "hr-it",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/1002"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "id": "1005",
+  "type": "page",
+  "title": "Smart working – Italia (dal 2027)",
+  "space": {
+    "key": "HR-IT"
+  },
+  "version": {
+    "number": 1,
+    "when": "2026-11-05T09:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "remote-work",
+      "italy"
+    ],
+    "language": "it",
+    "properties": {
+      "valid_from": "2027-01-01"
+    }
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-it",
+        "hr-it",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/1005"
+  }
+}

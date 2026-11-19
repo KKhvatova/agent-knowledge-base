@@ -1,0 +1,35 @@
+{
+  "id": "1004",
+  "type": "page",
+  "title": "Smart working – Italia",
+  "space": {
+    "key": "HR-IT"
+  },
+  "version": {
+    "number": 5,
+    "when": "2025-12-01T09:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "remote-work",
+      "italy"
+    ],
+    "language": "it",
+    "properties": {
+      "valid_from": "2025-01-01",
+      "valid_to": "2026-12-31"
+    }
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-it",
+        "hr-it",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/1004"
+  }
+}

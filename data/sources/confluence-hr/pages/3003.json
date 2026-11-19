@@ -1,0 +1,32 @@
+{
+  "id": "3003",
+  "type": "page",
+  "title": "Parental Leave – United States",
+  "space": {
+    "key": "HR-US"
+  },
+  "version": {
+    "number": 2,
+    "when": "2026-02-01T15:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "parental-leave",
+      "united-states"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-us",
+        "hr-us",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/3003"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "id": "3001",
+  "type": "page",
+  "title": "Paid Time Off – United States",
+  "space": {
+    "key": "HR-US"
+  },
+  "version": {
+    "number": 3,
+    "when": "2026-03-15T15:00:00Z"
+  },
+  "metadata": {
+    "labels": [
+      "leave",
+      "united-states"
+    ],
+    "language": "en",
+    "properties": {}
+  },
+  "restrictions": {
+    "read": {
+      "groups": [
+        "staff-us",
+        "hr-us",
+        "hr-global"
+      ]
+    }
+  },
+  "_links": {
+    "webui": "https://wiki.example/pages/3001"
+  }
+}
