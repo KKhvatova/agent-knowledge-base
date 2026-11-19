@@ -929,3 +929,37 @@ Every incident ends with one question: **which test would have caught this earli
 ## 12. POC vs. production
 
 ## 13. Risks and open questions
+
+### 13.1 Risks
+
+Ranked by how much they worry me, not by how likely they are to come up in a design review.
+
+| # | Risk | Likelihood | Impact | Mitigation | Residual concern |
+|---|---|---|---|---|---|
+| 1 | **Identity data is incomplete or wrong.** Department, country or role missing or outdated in the IdP. | Medium–high | High: authorization is only as good as the attributes it uses | Identity data quality checks before onboarding; deny when attributes are missing; HR as owner of attribute correctness | This is often an organisational problem, not a technical one, and can delay the whole project |
+| 2 | **Permission mapping errors** cause a leak | Medium | High | Deny by default when uncertain; mapping tests approved by owners; authorization matrix in every release; filter–check double enforcement (§6.4) | Tests cover the cases we think of; a source with exotic sharing rules can still surprise us |
+| 3 | **Source owners do not engage** (onboarding, approvals, golden questions, conflict tickets) | High | Medium–high: slower onboarding, stale golden sets, unresolved conflicts | Keep the owner's work small and explicit (§4.6); report per-source health to department leads | Without executive sponsorship, the system degrades into "indexing whatever is reachable" |
+| 4 | **Employee monitoring concerns.** Logs of what employees ask an HR assistant are personal data, and in several EU countries (Italy included) tools that could monitor employees require consultation with employee representatives | Medium | High: legal blocker for HR use cases | Logs keep references, not content (§6.6); question logs pseudonymised and short-lived; involve legal and works councils **before** launch | Must be clarified country by country; can change what can be logged and evaluated |
+| 5 | **LLM-derived assets are wrong but pass the evals** | Medium | Medium | Eval gate; owner approval for confidential content; original source always cited next to derived content; feedback loop to the observer | Evals only cover known questions |
+| 6 | **Prompt injection** through editable content | Medium | Low–medium thanks to authorization (§6.5) | Authorization as primary defence; content marked as data; ingestion scanning; output guardrails | An injection can still produce a *misleading* answer within the user's permissions |
+| 7 | **Permission changes not yet synced** | Medium | Medium | Fast path for permission changes; live checks for restricted content | A window of minutes remains for non-restricted content |
+| 8 | **Cost grows faster than value**: embeddings, LLM curation, regional duplication, evals on every release | Medium | Medium | Hash-based skipping; tiered models; cached evals; cost per source and per Context Repo on dashboards | Derived assets are the biggest lever; they can be switched off per domain |
+| 9 | **Conflict detection does not scale** or produces too many false conflicts | Medium | Medium: noise for owners and users | Compare only candidate pairs through the entity layer; start with high-value domains | The least mature part of the design; may need to start as a reporting tool, not an answer-time feature |
+| 10 | **The observer takes a wrong action** | Low–medium | Medium | Allowlist of reversible actions; rate limits; verification after each action; shadow mode first (§8.4) | A wrong rollback can serve older content for a while |
+| 11 | **Sources lack change events or have strict rate limits** | Medium | Medium: freshness targets missed | Polling plus reconciliation; negotiated rate limits; freshness targets set per source, not globally | Some sources may only ever be "daily fresh" |
+| 12 | **Recent managed services change or underperform** (AgentCore, S3 Vectors, OpenSearch next gen) | Low–medium | Medium | Portable MCP server; Aurora as the stable system of record; in-process Cedar fallback (§9.3) | Some migration cost if a service is replaced |
+| 13 | **Users lose trust** when the agent says "sources disagree" or "data may be stale" | Medium | Medium | Clear wording; most recent source marked; conflicts routed to owners so they disappear over time | Transparency is the right default, but it needs good UX in the agents |
+| 14 | **Scope creep** into analytics, workflow automation or document authoring | Medium | Medium | Non-goals stated explicitly (§1.3); warehouse access through dedicated tools | Needs a clear owner of the platform roadmap |
+
+### 13.2 Open questions for discussion
+
+These are the points I would clarify first, because the answers change the design:
+
+1. **Real scale and sources.** How many employees, countries, systems and documents? Which systems do HR, Sales, Product and Engineering actually use? (§2)
+2. **Identity.** Which IdP, and how reliable are department, country, role and manager attributes today?
+3. **Residency and legal constraints.** Which data must stay in which region? Is HR data processing by an LLM approved, and under which conditions? Are employee representatives already involved in AI tools?
+4. **First agents.** Which use case comes first, and what does success look like for it? This decides which sources to onboard first.
+5. **Freshness expectations.** Are minutes enough everywhere, or are there sources where seconds matter?
+6. **Ownership.** Who owns the platform, and who owns each source's mapping, authority rules and golden questions?
+7. **Existing tools.** Is there already an enterprise search or a managed product (e.g. Amazon Quick, Glean) in use? It could change the build-vs-buy decision (§9.1).
+8. **Budget.** Is there a cost envelope per query or per month that should drive the model and storage choices?
