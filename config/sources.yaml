@@ -1,0 +1,63 @@
+# Source onboarding configuration (DESIGN.md §4.6).
+# The connector is code; everything a source owner agrees to at onboarding is here.
+#
+# Permission mapping (pipeline step T3): each source expresses permissions its own way.
+# The mapping translates them into two attributes used by the Cedar policies:
+#   audience: who may read (staff | hr | public)    country: IT | CA | US | GLOBAL
+# Anything the mapping does not recognise falls back to owner_only (deny by default).
+
+sources:
+  confluence-hr:
+    connector: confluence_export
+    path: data/sources/confluence-hr
+    department: people
+    owners:                       # by Confluence space
+      HR-IT: hr-it-team@shopfully.example
+      HR-CA: hr-ca-team@flipp.example
+      HR-US: hr-us-team@flipp.example
+      HR-GLOBAL: people-ops@shopfully.example
+    freshness_target_minutes: 15
+    circuit_breaker:
+      max_delete_ratio: 0.2
+    permission_mapping:
+      kind: groups                # acl_raw.read_groups is a list of Confluence groups
+      groups:
+        all-staff: { audience: staff, country: GLOBAL }
+        staff-it:  { audience: staff, country: IT }
+        staff-ca:  { audience: staff, country: CA }
+        staff-us:  { audience: staff, country: US }
+        hr-it:     { audience: hr, country: IT }
+        hr-ca:     { audience: hr, country: CA }
+        hr-us:     { audience: hr, country: US }
+        hr-global: { audience: hr, country: GLOBAL }
+
+  drive-benefits:
+    connector: drive_folder
+    path: data/sources/drive-benefits
+    department: people
+    owners:
+      default: benefits-team@shopfully.example
+    freshness_target_minutes: 1440
+    circuit_breaker:
+      max_delete_ratio: 0.5       # small source: a single deletion is already 33%
+    permission_mapping:
+      kind: group_emails          # acl_raw.permissions[].emailAddress
+      groups:
+        staff-it@groups.example: { audience: staff, country: IT }
+        staff-ca@groups.example: { audience: staff, country: CA }
+        staff-us@groups.example: { audience: staff, country: US }
+        hr-it@groups.example:    { audience: hr, country: IT }
+        hr-ca@groups.example:    { audience: hr, country: CA }
+        hr-us@groups.example:    { audience: hr, country: US }
+
+  hris-policies:
+    connector: hris_policy_table
+    path: data/sources/hris
+    department: people
+    owners:
+      default: hris-admins@shopfully.example
+    freshness_target_minutes: 1440
+    circuit_breaker:
+      max_delete_ratio: 0.5
+    permission_mapping:
+      kind: country               # acl_raw.visible_to_country
