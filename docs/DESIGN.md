@@ -818,9 +818,45 @@ CloudWatch alarms and pipeline events go to EventBridge. A Step Functions workfl
 
 ## 9. Technology choices
 
-| Component | Choice | Why | Alternatives excluded and why |
+The general principle: **managed AWS services for infrastructure, our own code where the value of the system lies** (permission mapping, versioning and provenance, the release gate, the observer). Service capabilities below reflect AWS documentation as of November 2026 and should be re-checked before implementation, since several of these services are recent.
+
+### 9.1 Build or buy?
+
+Before choosing components, the first question is whether to build at all. Managed products now cover a large part of this problem:
+
+| Option | What it offers | Why it is not the core of this design |
+|---|---|---|
+| **Amazon Bedrock Knowledge Bases** | Managed ingestion, chunking, embedding and retrieval; data-source connectors for SharePoint, Confluence, Salesforce, S3, web; document-level ACLs on several connectors | Versioning, provenance, derived assets, per-workflow releases, eval-gated promotion and rollback are outside its model. Raw content and source permissions are not kept in a form we can re-process. |
+| **Amazon Quick** (formerly Q Business / Quick Suite) and enterprise search products (e.g. Glean) | End-user assistant with many connectors and identity-aware, document-level ACLs | Built for humans searching, not for agents consuming governed context. Limited control over ranking, versions and evaluation; per-user pricing; the knowledge layer is not independent of the vendor's assistant. |
+| **Build on AWS primitives** (this design) | Full control over the parts that make knowledge *accurate, current and authorized* | More engineering and operations. Justified only because those controls are the requirement. |
+
+**Decision:** build the knowledge layer, but stay pragmatic. Where a managed connector already syncs a source *with* its permissions, it is worth evaluating as a connector behind our contract (§4.1) instead of writing one, provided it lets us capture raw content and raw permissions. This is the first build-vs-buy decision to revisit with real requirements.
+
+### 9.2 Component by component
+
+| Component | Choice | Why | Alternatives excluded |
 |---|---|---|---|
-| _TODO_ | | | |
+| **Connector runtime** | AWS Lambda for light connectors; ECS Fargate tasks for long or heavy syncs | Lambda fits event-driven, short work; Fargate handles large reconciliations and big files without time limits | **AppFlow**: few relevant connectors, no permission model. **Airbyte / managed ELT**: designed for tabular loads into a warehouse; does not carry document permissions or hierarchy. Kept as an option for structured sources that feed the warehouse. |
+| **Change events and queues** | EventBridge for routing; SQS FIFO per source, grouped by record id | Per-record ordering (§4.3), dead-letter queues, isolation per source, no servers | **Kinesis / MSK (Kafka)**: per-key ordering is possible, but the operational cost is not justified at ~100k changes per day. Reconsider if freshness must reach seconds (§2.1). |
+| **Pipeline orchestration** | AWS Step Functions | Explicit state per document, retries, human-approval steps for the release gate, visible execution history | **MWAA (Airflow)**: schedule-oriented, minutes of latency per run. **Glue**: built for tabular ETL. |
+| **Raw snapshot** | Amazon S3 with versioning, encryption, Object Lock in governance mode where allowed (§7.5) | Cheap, durable, versioned by design, region-pinnable | Storing raw content in the database: expensive and mixes immutable history with live data. |
+| **Parsing** | Open-source layout-aware parsers (e.g. Docling or Unstructured) in containers; Amazon Textract for scanned documents | Structure-preserving output (headings, tables); Textract only where OCR is really needed | **LLM-based parsing for everything**: costly at millions of documents and can silently alter content, which breaks fidelity. |
+| **Embeddings** | Multilingual embedding model on Bedrock (Cohere Embed multilingual, or Titan Text Embeddings) | Content is in at least five languages; managed, no GPUs to run | **Self-hosted models on SageMaker**: more control, but GPU operations for no clear gain. **English-only models**: wrong for this company. |
+| **LLM** | Claude on Bedrock: a small, fast model for bulk curation (T5) and conflict checks; a larger model for observer diagnosis | Data stays in the AWS account and region; tiered by task cost | **Calling a model API outside AWS**: an extra data processor and residency question. **Open-weight models**: possible for bulk curation later, if cost demands it. |
+| **Asset store** (assets, versions, provenance, entities, Context Repos, permission attributes, vectors) | **Aurora PostgreSQL with pgvector** and full-text search | One transactional store for versions, releases, joins with entities and permission filtering *in the same query* as vector and keyword search. Consistency between "which version is active" and "what is indexed" comes for free. | **OpenSearch Serverless**: excellent hybrid search, and its newer generation scales to zero, so cost is no longer the main objection. Excluded because versions, releases, entities and permission attributes would live in a second store, and keeping two stores consistent is exactly the kind of problem this system exists to avoid. **First choice for scaling out** the search index (§2.1). **S3 Vectors**: very cheap at huge scale, but no keyword search, limited filterable metadata per vector, no joins. A candidate for a cold tier of rarely used content. **Kendra**: costly and opaque ranking. **Neptune**: no multi-hop graph need today (§5.3). |
+| **Agent access layer** | MCP server running on Bedrock AgentCore Runtime, exposed through AgentCore Gateway | MCP is the standard most agent frameworks speak, so any agent can connect without an adapter. AgentCore handles hosting, scaling and tool-level policy. | **Custom REST API**: every agent framework would need its own adapter. **Agent-framework-specific integrations** (e.g. action groups of one agent product): ties the knowledge layer to one way of building agents. |
+| **Identity** | Corporate IdP (Okta or Entra ID) federated with AWS; AgentCore Identity for on-behalf-of token exchange | The user's identity flows to every call; the agent never holds standing access | **Agent service accounts with broad access**: the agent would exceed the user's permissions. |
+| **Authorization** | Cedar policies. **Amazon Verified Permissions** for asset-level decisions; **AgentCore Policy** (also Cedar) for tool-level decisions at the gateway | One policy language for both levels; policies are analysable and testable; the same files run in the POC with the Cedar library | **OPA / Rego**: more general, but no managed AWS service and harder to analyse. **Postgres row-level security alone**: tied to one database, does not cover live tools, harder to test across systems. |
+| **Observability** | CloudWatch metrics and alarms; OpenTelemetry traces (AgentCore Observability) | Native to the stack; traces link an agent's answer to retrieval, policy decisions and tool calls | A third-party platform (e.g. Datadog) is equally valid if it is already the company standard. |
+| **Evaluation** | Own evaluation harness run by Step Functions on every candidate release, plus scheduled runs on active releases | Evals are the release gate, so they must be fully under our control and versioned with the Context Repo | Managed agent-evaluation services: worth adopting for online quality scoring once mature, but not as the gate. |
+| **Observer agent** | Agent on AgentCore Runtime with Claude, using a separate operations MCP server; notifications via SNS to Slack and ticketing | Same runtime as other agents, isolated tools and identity (§8.4) | Plain alarms only: detect, but cannot diagnose. |
+| **Infrastructure as code** | AWS CDK or Terraform, one stack per region | Regional data planes must be identical and reproducible | Manual setup: not repeatable across regions. |
+
+### 9.3 Known limits to watch
+
+- **Verified Permissions throughput.** Batch authorization accepts up to 30 decisions per call, and the default request quota is modest (tens of requests per second per region). At the assumed load (~50k queries per day) this is sufficient, with headroom. If load grows by an order of magnitude, the fallback is to evaluate Cedar **in-process** in the MCP server, with policies synced from the Verified Permissions store. Same policies, no network call.
+- **AgentCore maturity.** Several AgentCore capabilities reached general availability between late 2025 and 2026. They are a reasonable choice, but the MCP server is kept portable (a standard container) so that it can run on ECS if needed.
+- **pgvector at scale.** Comfortable at the assumed ~50M chunks with HNSW indexes and partitioning by region. Beyond that, move vector search to OpenSearch and keep Aurora as the system of record (§2.1).
 
 ## 10. Trade-offs
 
