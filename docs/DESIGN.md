@@ -106,15 +106,36 @@ Checking every source's own permissions on every query would be the most faithfu
 
 ## 2. Known vs. assumed
 
-| Topic | Known (from the brief) | Assumed (by me) | Design impact if wrong |
+The brief leaves most quantities open. This section separates what the brief states from what I assumed, and says **what would change in the design if an assumption turned out to be wrong**. None of the numbers below come from ShopFully or Flipp: they are plausible orders of magnitude for a company of this kind, to be replaced with real figures.
+
+### 2.1 Scale and load
+
+| Topic | Known (from the brief) | Assumed | Design impact if wrong |
 |---|---|---|---|
-| Company scale | Global, multi-department | ~1,500 employees, 6 countries (IT, ES, FR, CA, US, BR) | _TODO_ |
-| Sources | Heterogeneous, independently owned | 30–50 systems (Confluence, SharePoint/Drive, Salesforce, Jira, Workday/BambooHR, NetSuite, Slack, internal DBs) | _TODO_ |
-| Volume / churn | Continuous create/edit/delete | ~2–5M documents, 1–3% daily churn | _TODO_ |
-| Freshness | Must be "current" | ≤15 min (event sources), ≤24 h (polled), ACL changes ≤5 min or live-checked | _TODO_ |
-| Agent load | None of the agents exist yet | 10–30 workflows, ~50k queries/day, p95 retrieval < 800 ms | _TODO_ |
-| Cloud | — | AWS | _TODO_ |
-| Jurisdictions | Global | EU (GDPR) and Canada (PIPEDA) at minimum | _TODO_ |
+| Company size | Global, multi-department | ~1,500 employees, 6 countries (IT, ES, FR, CA, US, BR) | **10× larger:** the permission model grows faster than the content (more groups, more exceptions); permission sync becomes a dedicated pipeline. Storage choices hold. |
+| Number of sources | Heterogeneous, independently owned | 30–50 systems: Confluence, SharePoint/Drive, Salesforce, Jira, GitHub, Workday/BambooHR, NetSuite, Slack, internal databases | **Many more (hundreds):** hand-written connectors no longer scale; a connector SDK, a managed connector platform, or a self-service onboarding flow for source owners becomes necessary. |
+| Volume and churn | Records created, edited, deleted every day | ~2–5M documents (~50M chunks), 1–3% changed per day | **Above ~50M chunks or much higher churn:** pgvector on Aurora stops being the right store; move vectors to OpenSearch or S3 Vectors and keep Aurora for metadata, versions and permissions. Embedding cost becomes a budget line to manage. |
+| Agent load | No agents exist yet | 10–30 workflows, ~50k queries/day, p95 retrieval < 800 ms | **10× more queries:** add read replicas and a semantic cache; the live-check path for sensitive data becomes the bottleneck and needs caching with short TTLs. |
+| Freshness targets | Knowledge must be "current" | ≤ 15 min for event-driven sources, ≤ 24 h for polled sources, permission changes ≤ 5 min | **Stricter (seconds):** batch-oriented curation (Step Functions) must become streaming; LLM-derived assets cannot meet seconds-level freshness and would be served with an explicit "derived from version X" warning. |
+
+### 2.2 Environment and constraints
+
+| Topic | Known (from the brief) | Assumed | Design impact if wrong |
+|---|---|---|---|
+| Cloud | — | AWS, with Bedrock available in the needed regions | **Other cloud:** the architecture holds; components map to equivalents (e.g. GCS, AlloyDB, Vertex AI). Cedar runs anywhere as a library. |
+| Identity | — | A corporate IdP (Okta or Entra ID) is the single source of identity, with department, country and role as user attributes | **No reliable user attributes:** this is the most serious gap. Authorization depends on them; the project would start by cleaning up identity data. |
+| Source APIs | Different access methods | Most sources offer an API; about half also offer webhooks or change events | **Few webhooks:** freshness relies on polling; targets have to be relaxed or polling made more frequent, at the cost of API rate limits. |
+| Source owners | Each department owns its sources | Each source has a named owner who can validate permission mappings and authority rules | **No accountable owner:** permission mappings cannot be validated; those sources stay "owner-only" under the deny-by-default rule until someone takes ownership. |
+| Jurisdictions | Global company | At least EU (GDPR) and Canada (PIPEDA); personal data must stay in its region | **Stricter residency (e.g. per country):** more regional data planes, higher cost; cross-region search becomes more limited. |
+| Use of LLMs on company data | — | Allowed through Bedrock, with no data used for model training; personal data is never sent for curation | **Not allowed for some data:** LLM-derived assets are disabled for those sources; they remain searchable as plain knowledge. |
+| Languages | Global company | Mixed Italian and English content (plus Spanish, French, Portuguese) | **Mostly single-language:** a monolingual embedding model would be cheaper and somewhat more accurate. |
+
+### 2.3 Assumptions about the agents
+
+| Topic | Known (from the brief) | Assumed | Design impact if wrong |
+|---|---|---|---|
+| Agent runtime | Agents will automate workflows across departments | Agents speak MCP, and always act for an identifiable end user | **Autonomous agents with no end user** (e.g. nightly jobs): they need their own service identities with explicitly scoped permissions, reviewed like any privileged account. |
+| Agent actions | — | Agents *read* from the knowledge base; any writes go to source systems through their own tools | **Agents need to write knowledge** (e.g. agent memories shared across users): requires a separate, reviewed write path, with provenance marking content as agent-generated. |
 
 ## 3. Architecture
 
