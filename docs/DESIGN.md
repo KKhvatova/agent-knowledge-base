@@ -666,16 +666,155 @@ Layers 2–4 reduce the probability of an attack succeeding, but none is fully r
 
 ## 7. Self-maintenance
 
-- Change propagation: additions, modifications, deletions (tombstones, grace period)
-- Versioning and rollback
-- Derived-asset invalidation via provenance
-- Eval-gated promotion and circuit breakers
-- Right to be forgotten
+Self-maintenance is the combination of four mechanisms described so far: change detection (§4), versioning with provenance (§5.2), eval-gated releases (§1.2) and the observer agent (§8). This section shows how they work together for every kind of change.
+
+### 7.1 How each kind of change propagates
+
+| Change in the source | Detected by | Raw snapshot | Assets | Context Repo |
+|---|---|---|---|---|
+| **Addition** | Event or polling | New raw version | New Knowledge assets (T2–T4); derived assets generated (T5) | Included in the next candidate release if in scope |
+| **Modification** | Event or polling; skipped if the content hash is unchanged | New raw version; previous kept | New asset versions; derived assets with provenance to the old version marked stale and regenerated | Next candidate release pins the new versions |
+| **Deletion** | Event if available, otherwise **reconciliation** | Tombstone; hard delete after grace period | Excluded from retrieval **immediately**; derived assets invalidated | Next release drops them |
+| **Permission change only** | Event, permission feed, or polling (fast path) | New raw version (ACL only) | `policy_attrs` updated in place, no re-embedding | No new release needed: permissions are evaluated at query time |
+| **Validity reached** (`valid_from` passes) | Scheduler | — | No change | No change: retrieval switches automatically to the version valid today (§5.4) |
+| **Source removed** (system retired, connector disabled) | Onboarding configuration | All records tombstoned | All assets excluded | Releases in scope drop the source; owners of affected Context Repos notified |
+
+Two choices in this table are deliberate:
+
+- **Deletions and permission restrictions take effect immediately**, before any new release. They reduce what an agent can see, so applying them early can never create a leak. Additions and modifications go through the release gate, because they change what an agent will *say*.
+- **Permission changes do not create releases.** They are enforced at query time (§6.4), so they never wait for evals.
+
+### 7.2 Releases without release storms
+
+With thousands of changes per day, creating one release per change would be wasteful. Instead:
+
+- Changes are **batched per Context Repo** in short windows (assumed 5 minutes). At the end of a window a single candidate release is built with every asset version that changed in scope.
+- The candidate is evaluated with the Context Repo's eval suite. Evals that do not depend on the changed assets are reused from cache, so a small change costs a small evaluation.
+- **Promotion** follows the rules of §1.2: automatic when evals pass and all changed assets are *internal* or lower; owner approval otherwise. Assets waiting for approval do not block the rest of the batch: the release is promoted without them, and they join a later one.
+
+### 7.3 Versioning and rollback
+
+Rollback is possible at three levels, from the fastest to the most surgical:
+
+| Level | What it does | When | Speed |
+|---|---|---|---|
+| **Release** | Move the Context Repo's active pointer back to a previous release | A release broke an agent | Seconds |
+| **Asset** | Quarantine a specific asset version: excluded from retrieval, kept for inspection | One asset is wrong, the rest of the release is fine | Seconds |
+| **Source** | Freeze a source at its last good state, and stop applying its changes | A connector or a source is misbehaving | Seconds; recovery needs a fix and a resync |
+
+Every rollback is itself recorded, with who or what triggered it and why. Nothing is ever deleted by a rollback: the "bad" versions remain available for diagnosis.
+
+### 7.4 Circuit breakers
+
+Circuit breakers stop changes that look like failures rather than real updates. When one trips, the affected source is frozen at its last good state, and the observer agent is notified (§8):
+
+| Breaker | Trips when (assumed, calibrated per source) | Typical cause |
+|---|---|---|
+| **Mass deletion** | > 20% of a source's records deleted in one sync | Connector bug, revoked service-account permissions |
+| **Mass permission broadening** | Many records suddenly become visible to much wider groups | Mapping bug, mistaken change at the source. A broadening is more dangerous than a restriction, so it is held for confirmation |
+| **Parse failure rate** | > 5% of changed records fail to parse | Source format changed |
+| **Schema drift** | Records arrive without mandatory metadata | Source API changed |
+| **Content collapse** | Average document length drops sharply | Source returns error pages or truncated content |
+
+### 7.5 Right to erasure
+
+An erasure request must remove personal data from everywhere, not just from the source:
+
+1. The record is tombstoned **without a grace period**.
+2. Raw versions, assets, embeddings, caches and search indexes holding the data are deleted, following provenance links.
+3. Derived assets that used the record are regenerated without it.
+4. Backups expire within their declared retention; this delay is part of the published retention policy.
+
+**A tension to declare:** S3 Object Lock, which protects the raw snapshot from tampering, also prevents deletion. Object Lock is therefore used in *governance* mode with a retention shorter than the legal erasure deadline, and **not at all** on buckets that may contain personal data. The design also keeps personal data out of the index in the first place (§1.2), so erasure mostly concerns mentions in documents rather than whole records.
+
+### 7.6 Changing the system itself
+
+The knowledge base must also stay correct when *we* change it:
+
+- **New embedding model or chunking strategy.** Built as a new index in parallel (blue/green), evaluated on every Context Repo's golden set, then switched. The old index is kept until the new one has run in production for a while.
+- **New LLM for curation.** Derived assets are regenerated in a candidate release and go through the normal eval gate.
+- **Policy changes.** Versioned and tested in CI against the user-by-asset matrix before deployment (§6.4).
 
 ## 8. Observer agent
 
-- Signals, deterministic detection, LLM diagnosis
-- Allowlisted reversible actions, own identity, rate limits, escalation
+The mechanisms in §7 react to problems they were designed for. The observer agent handles the rest: it watches the whole system, **diagnoses** what went wrong, takes a **limited set of safe actions**, and escalates everything else to humans.
+
+### 8.1 Detect, diagnose, act
+
+The observer is deliberately split into three parts, and only one of them uses an LLM:
+
+```mermaid
+flowchart LR
+  SIG["Signals<br/>metrics, eval results,<br/>breaker trips, feedback"] --> DET{"Detection<br/>deterministic rules<br/>and thresholds"}
+  DET -- "nothing abnormal" --> SIG
+  DET -- "incident opened" --> CTX["Collect context<br/>release diff, eval report,<br/>affected assets, logs"]
+  CTX --> DIAG["Diagnosis<br/>LLM: probable cause,<br/>proposed action"]
+  DIAG --> GUARD{"Guardrails<br/>action allowed?<br/>rate limit ok?"}
+  GUARD -- "yes" --> ACT["Execute action<br/>deterministic code"]
+  GUARD -- "no" --> ESC["Escalate to owner<br/>with diagnosis"]
+  ACT --> REP["Incident report<br/>+ notification"]
+  ESC --> REP
+  ACT --> VER{"Verify<br/>did metrics recover?"}
+  VER -- "no" --> ESC
+```
+
+- **Detection is deterministic.** Thresholds and eval results decide *whether* something is wrong. An LLM as a detector would be expensive, slow and inconsistent.
+- **Diagnosis uses an LLM.** This is where a model adds real value: reading a release diff, an eval report and a few logs, and producing a probable cause in plain language.
+- **Actions are executed by deterministic code**, chosen from an allowlist and checked by guardrails. The model proposes, code disposes.
+- **Every action is verified.** If metrics do not recover after the action, the incident is escalated instead of trying another action.
+
+### 8.2 Signals
+
+| Group | Signals |
+|---|---|
+| **Pipeline** | Sync failures, propagation lag per source, dead-letter queue growth, circuit-breaker trips |
+| **Quality** | Eval regression on a candidate or active release; rise in uncited answers or low retrieval scores |
+| **Freshness** | Assets past their verification window; sources unreachable |
+| **Security** | Spikes of denied requests per agent or user; any failure of the ACL leakage tests; disagreement between filter and explicit check (§6.4) |
+| **Users** | Rise in negative feedback on specific assets or topics; frequent questions with no answer |
+
+### 8.3 What the observer may do
+
+| Action | Reversible | Example trigger |
+|---|---|---|
+| **Roll back** a Context Repo to the last release that passed evals | Yes, move the pointer forward again | Eval regression after promotion |
+| **Quarantine** an asset version | Yes, release from quarantine | One asset causes wrong answers; injection suspected |
+| **Pause** a connector | Yes, resume | Repeated sync failures, circuit-breaker trip |
+| **Propose** a shared Memory or an Example | Not published until the release gate approves it | Repeated unanswered questions, recurring synonyms |
+| **Open** a ticket for an owner | — | Source conflict, failed mapping, anything outside the allowlist |
+
+What it may **never** do: delete data, change permissions or policies, edit content, change a source system, or promote a release that did not pass evals. These remain human decisions.
+
+### 8.4 Guardrails on the observer itself
+
+An observer with powers is itself a risk: a buggy observer could roll back good releases in a loop, and a compromised one could hide problems. It is therefore constrained like any other agent:
+
+- **Its own identity**, with Cedar policies limited to the allowlisted actions. It sees metadata of every asset, but content only up to *internal*; for confidential assets it sees diff statistics only (which sections, how many lines changed), and the diagnosis is handed to a human.
+- **Rate limits.** At most one automatic action per source or Context Repo per hour; a second incident on the same target in that window is escalated, never acted on. This prevents rollback loops.
+- **Full audit.** Every observation, diagnosis and action is logged, and its incident reports are reviewed weekly by the platform team.
+- **Shadow mode first.** When introduced, the observer only *proposes* actions; automatic execution is enabled per action type once its proposals have proven reliable.
+- **Who watches the watcher.** The observer emits a heartbeat; if it stops, a plain CloudWatch alarm pages the platform team.
+
+### 8.5 Example incident report
+
+```text
+INC-0042  hr-assistant  2026-11-19 14:32 UTC  status: mitigated
+
+Detected   Eval regression on promoted release r14: hit@5 dropped from 0.92 to 0.61
+           (11 of 20 golden questions affected, all about Canada).
+Diagnosis  Release r14 contains a new version of "Employee handbook – Canada" (v12).
+           Its parsed text is 70% shorter than v11; sections "Parental leave" and
+           "Vacation" are missing. Probable cause: the PDF parser failed on a new
+           two-column layout introduced in v12.
+Action     Rolled back hr-assistant to r13 (last release that passed evals).
+           Quarantined asset version handbook-ca v12.
+Verified   hit@5 back to 0.92 on r13.
+Escalated  Ticket to the HR-CA owner and to the platform team (parser fix needed).
+```
+
+### 8.6 On AWS
+
+CloudWatch alarms and pipeline events go to EventBridge. A Step Functions workflow collects the context (release diff, eval report, logs) and invokes the observer, an agent running on Bedrock AgentCore with Claude. The observer uses a **separate operations MCP server**, never the one used by business agents, whose tools are exactly the allowlist above (`get_release_diff`, `get_eval_report`, `rollback`, `quarantine_asset`, `pause_connector`, `open_ticket`). Notifications go through SNS to Slack and to the ticketing system.
 
 ## 9. Technology choices
 
