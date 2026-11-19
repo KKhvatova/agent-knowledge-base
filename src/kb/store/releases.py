@@ -47,12 +47,25 @@ def register(conn: psycopg.Connection, repo: ContextRepo) -> None:
 
 
 def _in_scope_asset_ids(conn: psycopg.Connection, repo: ContextRepo) -> list[int]:
-    """Current versions of every asset inside the repo's scope."""
+    """Current versions of every asset inside the repo's scope.
+
+    If a record's newest versions were quarantined by the observer, the versions pinned
+    by the active release are carried over, so the record does not disappear.
+    """
     scope = repo.manifest["scope"]
     rows = conn.execute(
-        "SELECT id, source_id FROM asset_versions "
-        "WHERE status = 'active' AND type = ANY(%s) AND department = ANY(%s)",
-        (scope["asset_types"], scope["departments"]),
+        "SELECT id, source_id FROM asset_versions av "
+        "WHERE av.type = ANY(%(types)s) AND av.department = ANY(%(departments)s) AND ("
+        "  av.status = 'active'"
+        "  OR (av.id IN (SELECT ra.asset_version_id FROM release_assets ra "
+        "                JOIN context_repos c ON c.active_release = ra.release_id "
+        "                WHERE c.name = %(repo)s)"
+        "      AND av.status = 'superseded'"
+        "      AND EXISTS (SELECT 1 FROM asset_versions q WHERE q.status = 'quarantined' "
+        "                  AND q.source_id = av.source_id AND q.external_id = av.external_id)"
+        "      AND NOT EXISTS (SELECT 1 FROM asset_versions a WHERE a.status = 'active' "
+        "                  AND a.source_id = av.source_id AND a.external_id = av.external_id)))",
+        {"types": scope["asset_types"], "departments": scope["departments"], "repo": repo.name},
     ).fetchall()
     return sorted(
         r["id"] for r in rows if any(fnmatch(r["source_id"], p) for p in scope["sources"])

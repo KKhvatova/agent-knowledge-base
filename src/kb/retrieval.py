@@ -20,7 +20,7 @@ from psycopg import sql
 
 from kb.authz.identity import Principal
 from kb.authz.policy import cedar_allowed, sql_filter
-from kb.config import ROOT, load_sources
+from kb.config import SOURCES_DIR, load_sources
 from kb.pipeline.embed import embed
 from kb.store.db import audit
 from kb.store.releases import active_release
@@ -63,9 +63,11 @@ def search(
     k: int = 6,
     as_of: date | None = None,
     candidates: int = 20,
+    release: dict | None = None,
 ) -> dict:
+    """Search the active release, or `release` if given (evals run on candidates)."""
     as_of = as_of or date.today()
-    release = active_release(conn, principal.context_repo)
+    release = release or active_release(conn, principal.context_repo)
     if release is None:
         return {"release": None, "results": [], "warnings": ["No active release."]}
 
@@ -145,8 +147,54 @@ def _to_result(
         "valid_to": asset["valid_to"].isoformat() if asset["valid_to"] else None,
         "last_synced": asset["last_synced"].isoformat(),
         "future_version": _future_version(conn, principal, release, asset, as_of),
-        "conflicts": [],
+        "conflicts": _conflicts(conn, principal, release, asset, as_of),
     }
+
+
+def _conflicts(
+    conn: psycopg.Connection, principal: Principal, release: dict, asset: dict, as_of: date
+) -> list[dict]:
+    """Other visible assets stating a different value for the same fact (DESIGN.md §1.2).
+
+    No authority rule is configured in the POC, so every conflict is shown to the agent,
+    with the most recently changed source marked as a hint, not a verdict.
+    """
+    where, params = _visible_where(principal, release["id"], as_of)
+    rows = conn.execute(
+        sql.SQL(
+            "SELECT mine.fact_key, f.value, av.title, av.section_path, av.source_id, "
+            "av.source_updated_at, av.asset_id FROM asset_facts mine "
+            "JOIN asset_facts f ON f.fact_key = mine.fact_key "
+            "JOIN asset_versions av ON av.id = f.asset_version_id "
+            "JOIN release_assets ra ON ra.asset_version_id = av.id "
+            "WHERE mine.asset_version_id = %(me)s AND {where}"
+        ).format(where=where),
+        {**params, "me": asset["id"]},
+    ).fetchall()
+    conflicts = []
+    for key in sorted({r["fact_key"] for r in rows}):
+        group = [r for r in rows if r["fact_key"] == key]
+        if len({r["value"] for r in group}) < 2:
+            continue
+        newest = max(r["source_updated_at"] for r in group)
+        conflicts.append(
+            {
+                "fact": key,
+                "statements": [
+                    {
+                        "value": r["value"],
+                        "source": r["source_id"],
+                        "title": r["title"],
+                        "section": r["section_path"],
+                        "source_updated_at": r["source_updated_at"].isoformat(),
+                        "most_recent": r["source_updated_at"] == newest,
+                    }
+                    for r in sorted(group, key=lambda r: r["source_updated_at"], reverse=True)
+                ],
+                "resolution": "No authority rule: show both values; the most recent is marked.",
+            }
+        )
+    return conflicts
 
 
 def _future_version(
@@ -199,7 +247,7 @@ def get_leave_balance(conn: psycopg.Connection, principal: Principal) -> dict:
     POC simplification: the "HRIS API" is the JSON export on disk. The tool takes no
     employee parameter, so it can only ever return the caller's own data.
     """
-    path = ROOT / "data" / "sources" / "hris" / "leave_balances.json"
+    path = SOURCES_DIR / "hris" / "leave_balances.json"
     try:
         rows = json.loads(path.read_text())
     except OSError:

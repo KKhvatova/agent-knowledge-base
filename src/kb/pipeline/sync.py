@@ -24,6 +24,7 @@ from kb.config import EVENTS_FILE, SourceConfig
 from kb.connectors.base import SourceRecord
 from kb.pipeline.embed import embed
 from kb.pipeline.enrich import AccessAttrs, map_permissions
+from kb.pipeline.facts import extract_facts
 from kb.pipeline.parse import parse
 from kb.store.db import audit
 
@@ -268,12 +269,13 @@ def _build_knowledge_assets(
             "SELECT coalesce(max(version), 0) + 1 AS v FROM asset_versions WHERE asset_id = %s",
             (asset_id,),
         ).fetchone()["v"]
-        conn.execute(
+        version_id = conn.execute(
             "INSERT INTO asset_versions (asset_id, version, type, source_id, external_id, "
             "provenance, title, section_path, content, url, language, owner, department, "
             "country, audience, classification, mapping_note, replaces, valid_from, valid_to, "
-            "last_synced, embedding) VALUES "
-            "(%s,%s,'knowledge',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),%s)",
+            "source_updated_at, last_synced, embedding) VALUES "
+            "(%s,%s,'knowledge',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),%s) "
+            "RETURNING id",
             (
                 asset_id,
                 version,
@@ -294,9 +296,18 @@ def _build_knowledge_assets(
                 record.metadata.get("replaces"),
                 _date(record.metadata.get("valid_from")),
                 _date(record.metadata.get("valid_to")),
+                record.updated_at,
                 vector,
             ),
+        ).fetchone()["id"]
+        facts = extract_facts(
+            record.title, section.text, attrs.country, record.mime_type, record.content
         )
+        for key, value in facts.items():
+            conn.execute(
+                "INSERT INTO asset_facts (asset_version_id, fact_key, value) VALUES (%s, %s, %s)",
+                (version_id, key, value),
+            )
 
 
 # --------------------------------------------------------------------------------------

@@ -29,8 +29,8 @@ def init_schema(conn: psycopg.Connection) -> None:
 def reset_schema(conn: psycopg.Connection) -> None:
     """Drop everything. Used by tests and `kb reset`."""
     conn.execute(
-        "DROP TABLE IF EXISTS audit_log, sync_state, release_assets, releases, context_repos, "
-        "asset_versions, records, raw_versions CASCADE"
+        "DROP TABLE IF EXISTS incidents, audit_log, sync_state, release_assets, releases, "
+        "context_repos, asset_facts, asset_versions, records, raw_versions CASCADE"
     )
     conn.commit()
     init_schema(conn)

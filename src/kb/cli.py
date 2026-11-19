@@ -5,11 +5,10 @@ from __future__ import annotations
 import typer
 
 from kb.authz.identity import issue_token
-from kb.config import load_sources
+from kb.config import ensure_working_copy, load_sources
 from kb.pipeline.sync import sync_source
 from kb.store import releases
 from kb.store.db import connect, init_schema, reset_schema
-from kb.store.releases import ContextRepo
 
 app = typer.Typer(help="Agent Knowledge Base POC", no_args_is_help=True)
 
@@ -40,7 +39,8 @@ def reset(yes: bool = typer.Option(False, "--yes", help="Confirm deleting all da
         typer.confirm("This deletes everything in the knowledge store. Continue?", abort=True)
     with connect() as conn:
         reset_schema(conn)
-    typer.echo("Knowledge store reset.")
+    ensure_working_copy(fresh=True)
+    typer.echo("Knowledge store reset; sources working copy recreated from data/sources/.")
 
 
 @app.command()
@@ -49,6 +49,7 @@ def sync(
     reconcile: bool = typer.Option(False, help="Also run full reconciliation (deletions)."),
 ) -> None:
     """Sync sources: events, then incremental polling, then (optionally) reconciliation."""
+    ensure_working_copy()
     sources = load_sources()
     selected = [sources[source]] if source else list(sources.values())
     with connect() as conn:
@@ -88,19 +89,41 @@ app.add_typer(repo_app, name="repo")
 
 
 @app.command()
-def release(repo: str = "hr-assistant") -> None:
-    """Build a candidate release of a Context Repo and promote it.
+def release(
+    repo: str = "hr-assistant",
+    force: bool = typer.Option(False, help="Emergency: promote even if evals fail (audited)."),
+) -> None:
+    """Build a candidate release, run the eval suite, promote only if it passes."""
+    from kb.evals.gate import release_with_gate
 
-    Evaluation gate: added in the next step; until then candidates are promoted directly.
-    """
     with connect() as conn:
-        candidate = releases.build_candidate(conn, ContextRepo.load(repo), created_by="cli")
-        if candidate is None:
-            typer.echo("Nothing changed since the active release.")
-            return
-        releases.promote(conn, candidate, {"summary": "no eval gate yet"}, actor="cli")
-        conn.commit()
-        typer.echo(f"{repo}: release r{candidate['number']} promoted.")
+        outcome = release_with_gate(conn, repo, actor="cli", force=force)
+    if outcome.status == "unchanged":
+        typer.echo("Nothing changed since the active release.")
+        return
+    number = outcome.release["number"]
+    typer.echo(f"{repo}: candidate r{number} -> {outcome.status.upper()}")
+    typer.echo(f"  evals: {outcome.report.summary}")
+    for failure in outcome.report.failures:
+        typer.echo(f"  - {failure}")
+    if outcome.status == "rejected":
+        typer.echo("  The active release is unchanged; agents keep seeing the last good one.")
+
+
+@app.command("eval")
+def eval_cmd(repo: str = "hr-assistant") -> None:
+    """Run the eval suite against the active release."""
+    from kb.evals.runner import run_suite
+
+    with connect() as conn:
+        active = releases.active_release(conn, repo)
+        if active is None:
+            typer.echo("No active release.")
+            raise typer.Exit(1)
+        report = run_suite(conn, repo, active)
+    typer.echo(f"r{active['number']}: {report.summary}")
+    for failure in report.failures:
+        typer.echo(f"  - {failure}")
 
 
 @repo_app.command("log")
@@ -137,6 +160,30 @@ def repo_rollback(
         target = releases.rollback(conn, repo, to, actor="cli", reason=reason)
         conn.commit()
     typer.echo(f"{repo}: active release is now r{target['number']}.")
+
+
+@app.command()
+def observe(
+    repo: str = "hr-assistant",
+    shadow: bool = typer.Option(False, help="Only propose actions; change nothing."),
+) -> None:
+    """Run the observer once: detect, diagnose, act (allowlist only), verify, report."""
+    from kb.observer.agent import observe as run_observer
+
+    with connect() as conn:
+        incidents = run_observer(conn, repo, shadow=shadow)
+    if not incidents:
+        typer.echo("Observer: nothing abnormal.")
+    for incident in incidents:
+        typer.echo(
+            f"Observer: {incident.kind} on {incident.target} -> {incident.status} "
+            f"(diagnosis: {incident.provider})"
+        )
+        for action in incident.actions:
+            typer.echo(f"  - {action}")
+        if incident.verification:
+            typer.echo(f"  verified: {incident.verification}")
+        typer.echo(f"  report: {incident.path}")
 
 
 @app.command()

@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS asset_versions (
     classification  TEXT NOT NULL CHECK (classification IN ('public', 'internal', 'confidential', 'restricted')),
     mapping_note    TEXT,                   -- why a record fell back to owner_only, if it did
     replaces        TEXT,                   -- external_id of the record this one replaces
+    source_updated_at TIMESTAMPTZ NOT NULL, -- last change in the source (for "most recent")
     valid_from      DATE,
     valid_to        DATE,
     last_synced     TIMESTAMPTZ NOT NULL,
@@ -67,6 +68,16 @@ CREATE TABLE IF NOT EXISTS asset_versions (
 CREATE INDEX IF NOT EXISTS asset_versions_record ON asset_versions (source_id, external_id);
 CREATE INDEX IF NOT EXISTS asset_versions_tsv ON asset_versions USING gin (tsv);
 CREATE INDEX IF NOT EXISTS asset_versions_embedding ON asset_versions USING hnsw (embedding vector_cosine_ops);
+
+-- Facts extracted during curation, used to detect conflicts between sources
+-- (DESIGN.md §1.2). POC: one deterministic extractor; production: entity layer + LLM.
+CREATE TABLE IF NOT EXISTS asset_facts (
+    asset_version_id BIGINT NOT NULL REFERENCES asset_versions (id),
+    fact_key         TEXT NOT NULL,         -- e.g. vacation_days_per_year:US
+    value            TEXT NOT NULL,
+    PRIMARY KEY (asset_version_id, fact_key)
+);
+CREATE INDEX IF NOT EXISTS asset_facts_key ON asset_facts (fact_key);
 
 -- Layer 4: Context Repos and their releases. A release pins exact asset versions.
 CREATE TABLE IF NOT EXISTS context_repos (
@@ -103,6 +114,18 @@ CREATE TABLE IF NOT EXISTS sync_state (
     frozen          BOOLEAN NOT NULL DEFAULT false,
     frozen_reason   TEXT,
     last_sync_at    TIMESTAMPTZ
+);
+
+-- Incidents opened by the observer agent (DESIGN.md §8).
+CREATE TABLE IF NOT EXISTS incidents (
+    id              BIGSERIAL PRIMARY KEY,
+    opened_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    kind            TEXT NOT NULL,          -- release_rejected | active_regression | source_frozen
+    target          TEXT NOT NULL,          -- context repo or source id
+    signal_ref      TEXT NOT NULL,          -- what triggered it (e.g. release number); dedupe key
+    status          TEXT NOT NULL CHECK (status IN ('open', 'mitigated', 'escalated', 'proposed')),
+    report          TEXT NOT NULL,
+    UNIQUE (kind, target, signal_ref)
 );
 
 -- Everything that changes state is recorded here (DESIGN.md §6.6, §7.3).

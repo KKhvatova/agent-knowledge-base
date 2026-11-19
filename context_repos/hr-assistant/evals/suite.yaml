@@ -1,0 +1,59 @@
+# Evaluation suite for the hr-assistant Context Repo (DESIGN.md §11.1).
+# Run on every candidate release; the release is promoted only if every gate passes.
+#
+# Golden questions point to a source record and a fact, not to a fixed answer text, so
+# when a policy changes only the expected fact needs re-confirming (DESIGN.md §11.1).
+
+k: 5
+
+gates:
+  hit_rate_min: 0.85      # expected record among the top k results
+  fact_recall_min: 0.85   # expected fact present in the top k results
+  acl_leaks_max: 0        # any leak blocks the release
+  behaviours_must_pass: true
+
+golden:
+  # Canada (English)
+  - { user: liam.chen@flipp.example, query: "How many vacation days do I get per year?", expect: "confluence-hr:2001", fact: "15 days" }
+  - { user: liam.chen@flipp.example, query: "Can I carry over unused vacation days?", expect: "confluence-hr:2001", fact: "5 unused days" }
+  - { user: liam.chen@flipp.example, query: "How many paid sick days do I have?", expect: "confluence-hr:2002", fact: "5 paid sick days" }
+  - { user: liam.chen@flipp.example, query: "Does the company top up parental leave pay?", expect: "confluence-hr:2003", fact: "93%" }
+  - { user: liam.chen@flipp.example, query: "How many days a week do I have to be in the office?", expect: "confluence-hr:2004", fact: "3 days per week" }
+  - { user: liam.chen@flipp.example, query: "Does the company match RRSP contributions?", expect: "drive-benefits:drv-ca-benefits", fact: "4%" }
+  # Italy (Italian, plus one cross-language question)
+  - { user: giulia.rossi@shopfully.example, query: "Quanti giorni di ferie ho all'anno?", expect: "confluence-hr:1001", fact: "26 giorni" }
+  - { user: giulia.rossi@shopfully.example, query: "Come faccio a richiedere le ferie?", expect: "confluence-hr:1001", fact: "Persona" }
+  - { user: giulia.rossi@shopfully.example, query: "Cosa devo fare se mi ammalo?", expect: "confluence-hr:1002", fact: "protocollo" }
+  - { user: giulia.rossi@shopfully.example, query: "Quanto vale il credito welfare?", expect: "drive-benefits:drv-it-welfare", fact: "1.000 euro" }
+  - { user: giulia.rossi@shopfully.example, query: "Quanti giorni di smart working posso fare a settimana?", expect: "confluence-hr:1004", fact: "2 giorni" }
+  - { user: giulia.rossi@shopfully.example, query: "What is the daily meal allowance in Italy when travelling?", expect: "confluence-hr:9001", fact: "40 EUR" }
+  # United States
+  - { user: emma.johnson@flipp.example, query: "How much is the commuter benefit?", expect: "drive-benefits:drv-us-benefits", fact: "100 USD" }
+  - { user: emma.johnson@flipp.example, query: "How long is paid parental leave for a primary caregiver?", expect: "confluence-hr:3003", fact: "16 weeks" }
+  - { user: emma.johnson@flipp.example, query: "How do I submit an expense report?", expect: "confluence-hr:9001", fact: "30 days" }
+  # HR (confidential content)
+  - { user: marco.bianchi@shopfully.example, query: "Quanti giorni ha il dipendente per le giustificazioni dopo una contestazione disciplinare?", expect: "confluence-hr:1006", fact: "5 giorni" }
+
+acl:
+  # Questions written to retrieve content the user must NOT see.
+  - { user: giulia.rossi@shopfully.example, query: "procedura disciplinare contestazione provvedimenti", must_not_see: ["confluence-hr:1006"] }
+  - { user: ethan.roy@flipp.example, query: "procedura disciplinare contestazione", must_not_see: ["confluence-hr:1006"] }
+  - { user: liam.chen@flipp.example, query: "ferie Italia giorni lavorativi", must_not_see: ["confluence-hr:1001"] }
+  - { user: liam.chen@flipp.example, query: "welfare aziendale credito buoni pasto", must_not_see: ["drive-benefits:drv-it-welfare"] }
+  - { user: emma.johnson@flipp.example, query: "Canada vacation entitlement carry-over", must_not_see: ["confluence-hr:2001"] }
+  - { user: giulia.rossi@shopfully.example, query: "US PTO days per year", must_not_see: ["confluence-hr:3001", "hris-policies:US:vacation"] }
+
+behaviours:
+  - name: conflict between handbook and HRIS is reported, most recent marked
+    user: emma.johnson@flipp.example
+    query: "How many PTO days do I get per year?"
+    expect_conflict: { fact: "vacation_days_per_year:US", most_recent_value: "15" }
+  - name: future policy is announced
+    user: giulia.rossi@shopfully.example
+    query: "Quanti giorni di smart working posso fare a settimana?"
+    expect_future_version: "2027-01-01"
+  - name: future policy is served on its validity date
+    user: giulia.rossi@shopfully.example
+    query: "Quanti giorni di smart working posso fare a settimana?"
+    as_of: "2027-02-01"
+    expect_fact: "3 giorni"

@@ -24,13 +24,14 @@ def synced(conn, sources):
     conn.execute(
         "INSERT INTO asset_versions (asset_id, version, type, source_id, external_id, provenance, "
         "title, section_path, content, url, language, owner, department, country, audience, "
-        "classification, last_synced) VALUES "
+        "classification, last_synced, source_updated_at) VALUES "
         "('edge:owner', 1, 'knowledge', 'x', 'owner', '{}', 't', 't', 't', 'u', 'en', "
-        " 'giulia.rossi@shopfully.example', 'people', 'GLOBAL', 'owner_only', 'internal', now()),"
+        " 'giulia.rossi@shopfully.example', 'people', 'GLOBAL', 'owner_only', 'internal', "
+        " now(), now()),"
         "('edge:public', 1, 'knowledge', 'x', 'public', '{}', 't', 't', 't', 'u', 'en', "
-        " 'x@example', 'people', 'GLOBAL', 'public', 'public', now()),"
+        " 'x@example', 'people', 'GLOBAL', 'public', 'public', now(), now()),"
         "('edge:restricted', 1, 'knowledge', 'x', 'restricted', '{}', 't', 't', 't', 'u', 'en', "
-        " 'x@example', 'people', 'IT', 'hr', 'restricted', now())"
+        " 'x@example', 'people', 'IT', 'hr', 'restricted', now(), now())"
     )
     return conn.execute("SELECT * FROM asset_versions ORDER BY id").fetchall()
 

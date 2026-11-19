@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -22,7 +23,20 @@ DATABASE_URL = os.environ.get("KB_DATABASE_URL", "postgresql://kb:kb@localhost:5
 EMBEDDING_MODEL = os.environ.get(
     "KB_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 )
-EVENTS_FILE = ROOT / "data" / "sources" / "events.jsonl"
+FIXTURES_DIR = ROOT / "data" / "sources"
+# The system reads a working copy of the sources, so demos can edit and delete
+# documents without touching the committed fixtures. `kb reset` recreates it.
+SOURCES_DIR = Path(os.environ.get("KB_SOURCES_DIR", ROOT / ".data" / "sources"))
+EVENTS_FILE = SOURCES_DIR / "events.jsonl"
+
+
+def ensure_working_copy(fresh: bool = False) -> Path:
+    if fresh and SOURCES_DIR.exists():
+        shutil.rmtree(SOURCES_DIR)
+    if not SOURCES_DIR.exists():
+        shutil.copytree(FIXTURES_DIR, SOURCES_DIR)
+    return SOURCES_DIR
+
 
 _CONNECTORS = {
     "confluence_export": ConfluenceExportConnector,
@@ -57,7 +71,7 @@ def load_sources(path: Path = ROOT / "config" / "sources.yaml") -> dict[str, Sou
         sid: SourceConfig(
             source_id=sid,
             connector=cfg["connector"],
-            path=ROOT / cfg["path"],
+            path=SOURCES_DIR / cfg["path"],
             department=cfg["department"],
             owners=cfg["owners"],
             freshness_target_minutes=cfg["freshness_target_minutes"],

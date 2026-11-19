@@ -1,4 +1,5 @@
 # Source onboarding configuration (DESIGN.md §4.6).
+# Paths are relative to the sources working copy (.data/sources by default).
 # The connector is code; everything a source owner agrees to at onboarding is here.
 #
 # Permission mapping (pipeline step T3): each source expresses permissions its own way.
@@ -9,7 +10,7 @@
 sources:
   confluence-hr:
     connector: confluence_export
-    path: data/sources/confluence-hr
+    path: confluence-hr
     department: people
     owners:                       # by Confluence space
       HR-IT: hr-it-team@shopfully.example
@@ -33,7 +34,7 @@ sources:
 
   drive-benefits:
     connector: drive_folder
-    path: data/sources/drive-benefits
+    path: drive-benefits
     department: people
     owners:
       default: benefits-team@shopfully.example
@@ -52,7 +53,7 @@ sources:
 
   hris-policies:
     connector: hris_policy_table
-    path: data/sources/hris
+    path: hris
     department: people
     owners:
       default: hris-admins@shopfully.example
