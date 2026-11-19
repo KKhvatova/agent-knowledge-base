@@ -860,11 +860,71 @@ Before choosing components, the first question is whether to build at all. Manag
 
 ## 10. Trade-offs
 
+Every main decision buys something and pays for it. The last column says when I would decide differently.
+
+| Decision | What we gain | What we pay | When I would choose otherwise |
+|---|---|---|---|
+| **Build the knowledge layer** instead of buying a managed product (§9.1) | Control over versioning, provenance, release gate, rollback, per-agent context | Months of engineering and an on-call platform team; slower time to first value | If the first agents only need simple Q&A over a few well-permissioned sources: start with a managed product and build only when its limits are hit |
+| **Copy and index** content, instead of querying every source live | Fast, available search across all sources, even when a source is down | Staleness (bounded by the propagation lag), a second copy of data to protect, permissions copied rather than native | Sources with very sensitive data or permission models that cannot be mapped: live reads only (§1.2) |
+| **One transactional store** (Aurora + pgvector) | Versions, releases, entities, permissions and search consistent in one query | A vector and keyword search that is good, not best-in-class; a scale ceiling | Above ~50M chunks or demanding search features: move search to OpenSearch, keep Aurora as system of record |
+| **Eval-gated releases** for additions and modifications | Wrong content, broken parsing and bad derivations are caught before agents use them | Minutes of extra lag on every change; eval maintenance effort | Sources where minutes matter more than correctness (e.g. incident status pages): serve as live tools instead |
+| **Owner approval for confidential derived assets** | No unapproved LLM text about legal or personal matters | Hours of delay for a small share of content; depends on owners responding | If owners cannot commit to response times: disable derived assets for those sources |
+| **Deny by default** when a permission mapping is uncertain | No leak from mapping errors | Some content is under-shared until its mapping is fixed; users may find less than they expect | Never for security; but the coverage metric must be watched so the system stays useful |
+| **Strict scope per Context Repo** | Less noise, smaller blast radius for prompt injection, per-agent evals and rollback | New needs require a new release; cross-domain questions must be planned | Exploratory "ask anything" assistants, if the business wants one: a separate Context Repo with a wide scope and stricter output guardrails |
+| **Evidence, not answers** from the MCP server | One place for reasoning; verifiable results; no double LLM cost | Every client needs its own LLM and prompt | Very simple clients (a Slack bot): add an `ask()` tool on top |
+| **LLM-derived assets** (procedures, FAQs) | Agents act on steps instead of prose; better answers to "how do I…" questions | Curation cost, risk of model errors, invalidation and regeneration on every source change | If evals show little gain over plain Knowledge assets for a domain: switch derivation off for that domain |
+| **Small entity layer** instead of a knowledge graph | Maintainable, deterministic links; enough for conflicts, filters and joins | No multi-hop reasoning over many relationship types | When agents repeatedly need multi-hop questions (§5.3) |
+| **Copied permissions + live checks for restricted content** | Fast search for most content; bounded risk for the most sensitive | Extra latency and source load for restricted content; permission sync is a pipeline to maintain | If a source offers a cheap, fast permission API: check live for more classes |
+| **Observer with autonomous actions** | Faster recovery (minutes instead of hours) for common failures | Risk of a wrong action; another component to secure and monitor | Start in shadow mode; enable automatic actions per type only once proven (§8.4) |
+| **Regional data planes** | Compliance with residency rules | Higher cost, duplicated infrastructure, limited cross-region search | If legal confirms that some content (e.g. global policies) may be stored centrally: keep it in one region and replicate read-only |
+
 ## 11. Quality evaluation and monitoring
 
-- Offline evals (golden set, ACL leakage, freshness)
-- Online monitoring (sync lag, connector errors, uncited answers, feedback)
-- Runbooks: what we do when problems arise
+Quality is evaluated on the same three properties the brief asks for, plus the two that make the system usable:
+
+| Dimension | Question | Key metrics | Target (assumed) |
+|---|---|---|---|
+| **Accurate** | Does the agent receive the right evidence, and is the answer faithful to it? | Retrieval hit@k and MRR; citation precision; faithfulness (answer supported by cited evidence); conflict detection recall | hit@5 ≥ 0.9; citation precision ≥ 0.95 |
+| **Current** | Does a change reach agents in time? | End-to-end propagation lag per source (p50, p95); share of assets past their verification window | Within the targets of §2.1 |
+| **Authorized** | Does anyone ever see what they should not? | ACL leakage rate; filter–check disagreements (§6.4); permission-change lag | **0 leaks** (any leak is an incident) |
+| **Useful** | Do users get answers? | Share of questions with no relevant evidence; user feedback; share of content restricted by uncertain mappings | Trends, not fixed targets |
+| **Efficient** | Is it fast and affordable? | p95 latency per tool; cost per query; curation cost per source | p95 retrieval < 800 ms |
+
+### 11.1 Offline evaluation: the release gate
+
+Every Context Repo has its own evaluation suite, versioned with it and run on every candidate release:
+
+- **Golden questions.** Real questions with the asset ids that must be retrieved and the facts the answer must contain. Built from three sources: questions written by source owners at onboarding (§4.6), real user questions sampled from logs (with consent and anonymisation), and adversarial questions (ambiguous wording, other languages, outdated terms).
+- **Authorization matrix.** For a set of test users (different countries, roles, departments), the assets each must and must not see. Any leak fails the release.
+- **Freshness and validity.** Questions whose answers depend on recent changes, future-dated policies (§5.4) and deleted documents, which must no longer appear.
+- **Conflict cases.** Known pairs of conflicting sources: the conflict must be reported, with the most recent source marked.
+- **Injection cases.** Documents containing planted instructions: the agent must not follow them, and must not be able to reach data outside the user's permissions.
+
+**LLM-as-judge, with care.** Faithfulness and answer completeness are scored by an LLM judge, because they cannot be checked with exact matching. The judge itself is evaluated: a sample of its scores is labelled by humans each month, and it is used as a gate only on criteria where its agreement with humans is high. Retrieval, citation, authorization and freshness are measured deterministically.
+
+**Keeping the golden set from going stale.** When a policy changes, the "right answer" changes too. Golden questions therefore point to **asset ids and facts**, not fixed answer text: when an asset changes, the questions linked to it are flagged, and their expected facts are re-confirmed by the owner. Otherwise the evals would end up rejecting correct updates.
+
+### 11.2 Online monitoring
+
+- **Canary edits.** Each source has a canary document that the platform edits on a schedule. The time until the change is visible through the MCP server is the **real end-to-end propagation lag**, measured continuously instead of estimated.
+- **Sampled answer review.** A small sample of production answers is scored daily by the LLM judge on faithfulness and citation, giving a quality trend between releases.
+- **Dashboards** per source (lag, errors, breaker trips, restricted share) and per Context Repo (eval scores per release, answer quality trend, feedback, latency, cost).
+- **User feedback** is linked to the assets that were cited, so negative feedback points to *what* needs fixing, not just *which answer* was bad.
+
+### 11.3 When problems arise
+
+| Symptom | Likely causes | Automatic response | Human response |
+|---|---|---|---|
+| Eval regression on a candidate release | Bad parse, wrong derivation, source error | Release not promoted; observer diagnoses | Owner or platform fixes the cause |
+| Eval regression on the active release (detected by scheduled runs or sampling) | Change in data validity, drift in user questions, model change | Observer rolls back to the last good release | Investigate; update golden set if the questions changed |
+| Propagation lag above target | Lost events, rate limits, slow source, queue backlog | Polling frequency raised; observer alerts | Fix connector, negotiate rate limits |
+| Circuit breaker trip | Connector bug, mass change at the source | Source frozen at last good state | Owner confirms the change was real, or platform fixes the connector |
+| **ACL leak** detected (eval, filter–check disagreement, report) | Mapping bug, policy bug, sync lag on permissions | Affected assets quarantined immediately | **Security incident**: root cause, notification process if real data was exposed, new test added to the matrix |
+| Rising "no answer" questions on a topic | Content gap, missing source, wrong scope | Observer proposes a Memory or reports the gap | Owner writes the missing content, or the Context Repo scope is reviewed |
+| Negative feedback concentrated on one asset | Outdated or wrong content at the source | Asset flagged; quarantined if feedback is severe | Owner corrects the source |
+| Rising share of content restricted by uncertain mappings | New permission patterns at a source | Reported in the weekly source review | Mapping updated and approved by the owner |
+
+Every incident ends with one question: **which test would have caught this earlier?** The answer is added to the evaluation suite, so the system gets harder to break in the same way twice.
 
 ## 12. POC vs. production
 
