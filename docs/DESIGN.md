@@ -928,9 +928,7 @@ Every incident ends with one question: **which test would have caught this earli
 
 ## 12. POC vs. production
 
-## 13. Risks and open questions
-
-### 13.1 Risks
+## 13. Risks
 
 Ranked by how much they worry me, not by how likely they are to come up in a design review.
 
@@ -950,16 +948,3 @@ Ranked by how much they worry me, not by how likely they are to come up in a des
 | 12 | **Recent managed services change or underperform** (AgentCore, S3 Vectors, OpenSearch next gen) | Low–medium | Medium | Portable MCP server; Aurora as the stable system of record; in-process Cedar fallback (§9.3) | Some migration cost if a service is replaced |
 | 13 | **Users lose trust** when the agent says "sources disagree" or "data may be stale" | Medium | Medium | Clear wording; most recent source marked; conflicts routed to owners so they disappear over time | Transparency is the right default, but it needs good UX in the agents |
 | 14 | **Scope creep** into analytics, workflow automation or document authoring | Medium | Medium | Non-goals stated explicitly (§1.3); warehouse access through dedicated tools | Needs a clear owner of the platform roadmap |
-
-### 13.2 Open questions for discussion
-
-These are the points I would clarify first, because the answers change the design:
-
-1. **Real scale and sources.** How many employees, countries, systems and documents? Which systems do HR, Sales, Product and Engineering actually use? (§2)
-2. **Identity.** Which IdP, and how reliable are department, country, role and manager attributes today?
-3. **Residency and legal constraints.** Which data must stay in which region? Is HR data processing by an LLM approved, and under which conditions? Are employee representatives already involved in AI tools?
-4. **First agents.** Which use case comes first, and what does success look like for it? This decides which sources to onboard first.
-5. **Freshness expectations.** Are minutes enough everywhere, or are there sources where seconds matter?
-6. **Ownership.** Who owns the platform, and who owns each source's mapping, authority rules and golden questions?
-7. **Existing tools.** Is there already an enterprise search or a managed product (e.g. Amazon Quick, Glean) in use? It could change the build-vs-buy decision (§9.1).
-8. **Budget.** Is there a cost envelope per query or per month that should drive the model and storage choices?
