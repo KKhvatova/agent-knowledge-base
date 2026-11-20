@@ -22,7 +22,7 @@ The AI did most of the typing. Every decision that shapes the system went throug
 | Self-maintenance | **Data versioning with rollback** as a hard requirement; an **observer agent** that intervenes when something goes wrong |
 | Accuracy | When sources conflict, show both and **name the most recent one** (I combined two of the proposed options) |
 | Stack | Python, Claude, **AWS** for production, freedom to differ in the POC |
-| POC scope | HR scenario, synthetic data plus the public website, MCP as the interface, local execution |
+| POC scope | HR scenario, synthetic data (the public website was planned, then left out), MCP as the interface, local execution |
 | Engineering practice | Conventional Commits checked by **Commitizen** (light version: check only, no version bump) |
 
 ## 1. Design
@@ -51,7 +51,7 @@ The AI did most of the typing. Every decision that shapes the system went throug
 
 ## 3. Testing
 
-The AI wrote tests together with each slice, not afterwards: 54 tests run against a real Postgres. The most important ones:
+The AI wrote tests together with each slice, not afterwards: 60 tests run against a real Postgres. The most important ones:
 
 - **Authorization matrix.** For every test user and every asset, the hand-written SQL filter and the Cedar policies must give the same answer. This is the test that makes a hand-written filter acceptable.
 - **Security regression tests.** While building releases, the AI found that deletions and permission restrictions were applied only to the *active* version of a record. Older versions, still pinned by the active release, kept being served. Both bugs were fixed (the change now applies to every version) and each got a regression test.

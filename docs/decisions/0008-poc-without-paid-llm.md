@@ -23,6 +23,6 @@ The POC must be easy for an evaluator to run, and must not depend on credentials
 
 ## Consequences
 
-- `make setup` is the only step needed; tests and demos are deterministic.
+- `make setup` is the only step needed. Tests are deterministic; demos are too with `KB_LLM=template` (otherwise the observer's wording comes from the LLM).
 - Derivation quality and scale are not demonstrated (DESIGN §12.3).
 - Every substitution is listed in the README and in DESIGN §12.2.

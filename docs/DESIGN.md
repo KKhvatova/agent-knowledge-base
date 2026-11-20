@@ -856,6 +856,7 @@ Before choosing components, the first question is whether to build at all. Manag
 
 - **Verified Permissions throughput.** Batch authorization accepts up to 30 decisions per call, and the default request quota is modest (tens of requests per second per region). At the assumed load (~50k queries per day) this is sufficient, with headroom. If load grows by an order of magnitude, the fallback is to evaluate Cedar **in-process** in the MCP server, with policies synced from the Verified Permissions store. Same policies, no network call.
 - **AgentCore maturity.** Several AgentCore capabilities reached general availability between late 2025 and 2026. They are a reasonable choice, but the MCP server is kept portable (a standard container) so that it can run on ECS if needed.
+- **Search quality.** Hybrid search fused with RRF ranks well enough for a first release, but generic sections can outrank the specific one (the POC shows it). The first improvement is a reranker on the top candidates (for example a rerank model on Bedrock), measured by the same golden questions.
 - **pgvector at scale.** Comfortable at the assumed ~50M chunks with HNSW indexes and partitioning by region. Beyond that, move vector search to OpenSearch and keep Aurora as the system of record (§2.1).
 
 ## 10. Trade-offs
@@ -948,6 +949,7 @@ Each claim of this design that the POC covers is backed by a test or a demo that
 | Future-dated policies are announced but not applied before their date | §5.4 | `test_releases.py`; Italian smart working policy valid from 2027-01-01 (behaviour check) |
 | LLM-derived assets carry provenance and are invalidated when their source changes; derived confidential content needs owner approval | §5.2, §1.2 | `test_derive.py`; `make demo-update` drops the stale procedure from the next release |
 | Circuit breakers freeze a source on mass deletion | §7.4 | `test_sync.py` |
+| A document whose content collapses cannot reach agents (POC: checked by the release gate against the last good release) | §7.4 | `make demo-incident`; `test_observer.py` |
 | The observer detects, diagnoses, acts only within its allowlist, verifies and reports | §8 | `make demo-incident` (quarantine + ticket), `make demo-rollback` (rollback), `test_observer.py` |
 | An LLM proposal outside the allowlist is never executed | §8.4 | `test_observer.py` |
 
@@ -972,7 +974,7 @@ Baseline on the POC's eval suite: hit@5 = 1.00, fact recall = 1.00, ACL leaks = 
 
 ### 12.3 What the POC does not prove
 
-- **Scale and latency.** About 20 documents and 100 assets. Nothing here says how retrieval behaves at a million assets or under concurrent load. The p95 target in §11 is untested.
+- **Scale and latency.** About 20 documents and 50 assets. Nothing here says how retrieval behaves at a million assets or under concurrent load. The p95 target in §11 is untested.
 - **Real connectors.** Rate limits, pagination, API errors, webhook loss and the real permission models of Confluence and Drive (inheritance, nested groups) are where most production effort goes (§4). The POC only reproduces their shape.
 - **Quality of LLM derivation.** Procedures were written once and reviewed by hand. The design's derivation step, and the LLM judge used to evaluate it (§11.1), are not implemented.
 - **Real identity data.** The POC trusts a clean employee table. Risk 1 in §13 (incomplete or wrong identity data) is exactly what it cannot show.

@@ -33,7 +33,7 @@ Beyond retrieval, the POC runs the full lifecycle of the design:
 
 - **Change detection**: events (webhook-like), incremental polling, and a full reconciliation that catches deletions nobody announced.
 - **Permission changes and deletions** reach agents immediately, across every version of a record, without waiting for a release.
-- **Content changes** reach agents only through a **release gated by evals**: golden questions, ACL leak probes, behaviour checks.
+- **Content changes** reach agents only through a **release gated by evals**: golden questions, ACL leak probes, behaviour checks, and a content-collapse check that blocks a document shrinking to less than half its size.
 - **Context Repo versioning**: every release pins asset versions; `kb repo diff` and `kb repo rollback` work like git.
 - **LLM-derived procedures** with provenance: when the source page changes, the procedure is marked stale and dropped from the next release until it is regenerated.
 - **Observer agent**: it detects a rejected release or a regression, diagnoses it (with an LLM if available), and acts within an allowlist (rollback, quarantine, ticket). It verifies the outcome and writes an incident report.
@@ -51,16 +51,17 @@ make setup      # deps, Postgres+pgvector in Docker, sync all sources, first gat
 The first run downloads the multilingual embedding model once. Expected output ends with:
 
 ```
-r1: PASS hit@5=1.00 fact_recall=1.00 acl_leaks=0 behaviours=3/3
+hr-assistant: candidate r1 -> PROMOTED
+  evals: PASS hit@5=1.00 fact_recall=1.00 acl_leaks=0 behaviours=3/3
 ```
 
 Then:
 
 ```bash
-uv run kb status                 # sources, freshness, active release
+uv run kb status                 # per source: records, active assets, last sync, frozen
 uv run kb eval                   # run the eval suite on the active release
 uv run kb repo log               # release history of the hr-assistant Context Repo
-make test                        # 54 tests (uses a separate kb_test database)
+make test                        # 60 tests (uses a separate kb_test database)
 make help                        # every target
 ```
 
@@ -84,7 +85,7 @@ claude mcp add --transport http kb-hr http://127.0.0.1:8765/mcp \
 claude                                                # then ask: "How many vacation days do I have left?"
 ```
 
-To switch user, remove the server (`claude mcp remove kb-hr`) and add it again with another token.
+To switch user, remove the server (`claude mcp remove kb-hr`) and add it again with another token. Tokens expire after 8 hours: after that, add the server again with a new token.
 
 **Claude Desktop** (stdio transport), in `claude_desktop_config.json`:
 
@@ -92,13 +93,15 @@ To switch user, remove the server (`claude mcp remove kb-hr`) and add it again w
 {
   "mcpServers": {
     "kb-hr": {
-      "command": "uv",
+      "command": "/absolute/path/to/uv",
       "args": ["--directory", "/absolute/path/to/agent-knowledge-base", "run", "kb", "serve"],
       "env": { "KB_MCP_TRANSPORT": "stdio", "KB_TOKEN": "<output of: uv run kb token liam.chen@flipp.example>" }
     }
   }
 }
 ```
+
+Use the absolute path printed by `which uv`: Claude Desktop does not start servers with your shell's `PATH`. Restart Claude Desktop after editing the file, and again with a new token after 8 hours.
 
 Tools exposed: `search_knowledge`, `get_asset`, `get_leave_balance` (live HRIS read, own data only), `context_info`. Retrieved text is returned as `untrusted_source_data`, with citation, validity dates, freshness and conflicts.
 
@@ -114,22 +117,32 @@ make demo-rollback   # a bad release is forced past the gate: the observer detec
                      # regression, rolls back to r1 and verifies
 ```
 
-Incident reports are written to `incidents/INC-NNNN.md`. Single changes can also be applied by hand: `uv run python scripts/demo.py delete-page | restrict-page`, then `make sync` (permission and deletion changes need no release).
+Incident reports are written to `incidents/INC-NNNN.md`. Single changes can also be applied by hand, then picked up with `make sync` (permission and deletion changes need no release):
+
+```bash
+uv run python scripts/demo.py delete-page     # a page deleted at the source, with no event
+uv run python scripts/demo.py restrict-page   # a page restricted to HR
+```
 
 ### Optional: an LLM for the observer
 
 The observer works without an LLM: it falls back to a deterministic, template-based diagnosis. With an LLM it writes the diagnosis and proposes an action, which is still validated against the allowlist.
 
 ```bash
-# Local, free: Ollama (native install on macOS, or: docker compose --profile llm up -d)
+# Local, free: Ollama, native install
 ollama pull qwen2.5:7b
+KB_LLM=ollama make demo-incident
+
+# ... or Ollama in Docker
+docker compose --profile llm up -d
+docker compose exec ollama ollama pull qwen2.5:7b
 KB_LLM=ollama make demo-incident
 
 # Anthropic API
 ANTHROPIC_API_KEY=... KB_LLM=anthropic make demo-incident
 ```
 
-`KB_LLM=auto` (default) uses Anthropic if a key is set, then Ollama if it is running, then the template.
+`KB_LLM=auto` (default) uses Anthropic if a key is set, then Ollama if it is running, then the template. Set `KB_LLM=template` for fully reproducible demo output.
 
 ## Repository map
 
@@ -148,7 +161,7 @@ src/kb/retrieval.py            hybrid search (vector + full-text, RRF), conflict
 src/kb/mcp_server/             MCP server
 src/kb/evals/                  eval runner and release gate
 src/kb/observer/               observer agent and LLM providers
-tests/                         54 tests, including an authorization matrix (Cedar vs SQL agreement)
+tests/                         60 tests, including an authorization matrix (Cedar vs SQL agreement)
 ```
 
 ## POC vs production
@@ -186,7 +199,7 @@ Every component maps to a production component in [`docs/DESIGN.md`](docs/DESIGN
 
 - **Eval baseline:** hit@5 = 1.00, fact recall = 1.00, ACL leaks = 0, behaviours 3/3 on 16 golden questions, 6 ACL probes and 3 behaviour checks. The derived procedures moved fact recall from 0.94 to 1.00.
 - **Small golden set.** It is written by the same person who wrote the data, so it measures regressions, not real-world quality.
-- **Ranking is not always ideal.** With a very small `k`, generic sections ("Carry-over", "How to request") can outrank the entitlement section. Hybrid search with RRF and no reranker is the reason. Production adds a reranker (see DESIGN §9).
+- **Ranking is not always ideal.** With a very small `k`, generic sections ("Carry-over", "How to request") can outrank the entitlement section. Hybrid search with RRF and no reranker is the reason. Production adds a reranker (DESIGN §9.3).
 - **Golden questions go stale.** After the legitimate 15→18 edit in `make demo-update`, the golden fact "15 days" no longer holds. The runner cannot tell a legitimate edit from corruption, so it **flags** the failure for the owner to re-confirm instead of excusing it (DESIGN §11).
 
 ## Configuration

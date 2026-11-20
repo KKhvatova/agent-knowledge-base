@@ -22,6 +22,6 @@ Use **Aurora PostgreSQL with pgvector** (HNSW indexes) and Postgres full-text se
 ## Consequences
 
 - Releases, permission filters and search are consistent by construction (transactions).
-- Search quality is good, not best-in-class; a reranker is the first improvement (the POC shows the ranking weakness it fixes).
+- Search quality is good, not best-in-class; a reranker is the first improvement (DESIGN §9.3; the POC shows the ranking weakness it fixes).
 - Scale ceiling around tens of millions of chunks per region with partitioning. Beyond that, move search to OpenSearch and keep Aurora as the system of record.
 - **In the POC:** PostgreSQL 16 + pgvector 0.8 in Docker (`src/kb/store/schema.sql`), hybrid search in `src/kb/retrieval.py`.
