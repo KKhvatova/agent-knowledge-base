@@ -2,7 +2,7 @@
 // The same file would be loaded into Amazon Verified Permissions in production.
 //
 // Principal: Employee  { email, country, role ("employee" | "hr"), hr_scope ("country" | "global") }
-// Resource:  Asset     { audience ("public" | "staff" | "hr" | "owner_only"), country, classification, owner }
+// Resource:  Asset     { audience ("public" | "staff" | "hr" | "hr_global" | "owner_only"), country, classification, owner }
 
 // Public content is readable by every employee.
 permit (principal is Employee, action == Action::"read", resource is Asset)
@@ -23,6 +23,12 @@ when {
   (principal.hr_scope == "global" ||
    resource.country == principal.country ||
    resource.country == "GLOBAL")
+};
+
+// Documents shared only with the global HR group.
+permit (principal is Employee, action == Action::"read", resource is Asset)
+when {
+  resource.audience == "hr_global" && principal.role == "hr" && principal.hr_scope == "global"
 };
 
 // Deny-by-default fallback: when a source permission could not be mapped with

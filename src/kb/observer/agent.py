@@ -19,13 +19,19 @@ from pathlib import Path
 import psycopg
 
 from kb.config import ROOT, load_sources
-from kb.evals.runner import run_suite
+from kb.evals.runner import last_good_release, run_suite
 from kb.observer.llm import SYSTEM, LLMProvider, TemplateProvider, choose_provider
 from kb.store import releases
 from kb.store.db import audit
 
 ACTOR = "observer"
 ALLOWED_ACTIONS = {"rollback", "quarantine", "open_ticket_only"}
+# Which actions make sense for which incident: an allowlisted action can still be wrong.
+ACTIONS_BY_KIND = {
+    "release_rejected": {"quarantine", "open_ticket_only"},
+    "active_regression": {"rollback", "open_ticket_only"},
+    "source_frozen": {"open_ticket_only"},
+}
 RATE_LIMIT_MINUTES = 60
 INCIDENTS_DIR = ROOT / "incidents"
 
@@ -51,24 +57,15 @@ class Incident:
 
 
 def _already_handled(conn: psycopg.Connection, kind: str, target: str, ref: str) -> bool:
+    """A signal is handled once acted on; a shadow-mode proposal does not count."""
     return (
         conn.execute(
-            "SELECT 1 FROM incidents WHERE kind = %s AND target = %s AND signal_ref = %s",
+            "SELECT 1 FROM incidents WHERE kind = %s AND target = %s AND signal_ref = %s "
+            "AND status <> 'proposed'",
             (kind, target, ref),
         ).fetchone()
         is not None
     )
-
-
-def _last_good_release(conn: psycopg.Connection, repo: str, before: int) -> dict | None:
-    """Most recent release before `before` that passed its evals (not forced)."""
-    return conn.execute(
-        "SELECT * FROM releases WHERE context_repo = %s AND number < %s "
-        "AND status IN ('promoted', 'rolled_back') AND (eval_report->>'passed')::boolean "
-        "AND coalesce((eval_report->>'forced')::boolean, false) = false "
-        "ORDER BY number DESC LIMIT 1",
-        (repo, before),
-    ).fetchone()
 
 
 def detect(conn: psycopg.Connection, repo: str) -> list[Incident]:
@@ -180,7 +177,7 @@ def _collect(conn: psycopg.Connection, incident: Incident) -> None:
         "SELECT * FROM releases WHERE context_repo = %s AND number = %s",
         (repo, int(incident.signal_ref[1:])),
     ).fetchone()
-    good = _last_good_release(conn, repo, bad["number"])
+    good = last_good_release(conn, repo, bad["number"])
     incident.context.update(
         {
             "bad_release": bad["number"],
@@ -250,13 +247,13 @@ def _diagnose(incident: Incident, provider: LLMProvider) -> None:
         "detected": incident.detected,
         "kind": incident.kind,
         "context": incident.context,
-        "allowed_actions": sorted(ALLOWED_ACTIONS),
+        "allowed_actions": sorted(ACTIONS_BY_KIND[incident.kind]),
         "candidate_targets": candidates,
     }
     try:
         proposal = provider.complete_json(SYSTEM, json.dumps(payload, default=str))
         valid = (
-            proposal.get("action") in ALLOWED_ACTIONS
+            proposal.get("action") in ACTIONS_BY_KIND[incident.kind]
             and set(proposal.get("targets", [])) <= set(candidates)
             and proposal.get("probable_cause")
         )
@@ -342,6 +339,14 @@ def _act(conn: psycopg.Connection, incident: Incident, shadow: bool) -> None:
         )
         return
 
+    if action == "rollback" and incident.context.get("last_good_release") is None:
+        incident.status = "escalated"
+        incident.actions.append(
+            "No earlier release passed its evals: nothing safe to roll back to. "
+            "Escalated to humans, no action."
+        )
+        return
+
     if action == "rollback":
         target = releases.rollback(
             conn,
@@ -414,8 +419,10 @@ def _write_report(conn: psycopg.Connection, incident: Incident) -> None:
         lines += ["", "**Eval failures**", *[f"- {f}" for f in failures]]
     report = "\n".join(lines) + "\n"
     conn.execute(
+        # A real run replaces an earlier shadow-mode proposal for the same signal.
         "INSERT INTO incidents (kind, target, signal_ref, status, report) "
-        "VALUES (%s, %s, %s, %s, %s)",
+        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (kind, target, signal_ref) "
+        "DO UPDATE SET status = EXCLUDED.status, report = EXCLUDED.report, opened_at = now()",
         (incident.kind, incident.target, incident.signal_ref, incident.status, report),
     )
     INCIDENTS_DIR.mkdir(exist_ok=True)

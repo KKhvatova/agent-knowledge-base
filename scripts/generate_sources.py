@@ -404,8 +404,7 @@ DRIVE_FILES: list[dict] = [
         "sections": [
             (
                 "Medical plans",
-                "Choice of two medical plans; the company pays 90% of the "
-                "premium for employees.",
+                "Choice of two medical plans; the company pays 90% of the premium for employees.",
             ),
             ("Retirement", "401(k) with a company match of 4% of salary."),
             ("Commuter", "Commuter benefit of 100 USD per month."),

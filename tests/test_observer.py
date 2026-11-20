@@ -10,6 +10,7 @@ from kb.authz.identity import principal_for
 from kb.evals.gate import release_with_gate
 from kb.observer import agent
 from kb.observer.llm import TemplateProvider
+from kb.pipeline.derive import derive
 from kb.pipeline.sync import sync_source
 from kb.retrieval import search
 from kb.store import releases
@@ -23,8 +24,10 @@ def _incidents_in_tmp(tmp_path, monkeypatch):
 
 
 def _sync(conn, sources):
+    """Same steps as `kb sync`: every source, then the derived procedures."""
     for cfg in sources.values():
         sync_source(conn, cfg, reconcile=True)
+    derive(conn)
 
 
 def _corrupt_ca_page(sources):
@@ -66,8 +69,10 @@ def test_observer_quarantines_after_rejection_and_next_release_keeps_good_versio
     assert incident.diagnosis["targets"] == ["confluence-hr:2001"]
     assert incident.path.exists()
 
-    # The quarantined version is carried out; the good one is kept: nothing to release.
-    assert release_with_gate(healthy, "hr-assistant", "test").status == "unchanged"
+    # The next release keeps the good version of the page (the quarantined one is left
+    # out). It still drops the procedure derived from that page: its source changed.
+    assert release_with_gate(healthy, "hr-assistant", "test").status == "promoted"
+    assert _liam_sees_15_days(healthy)
     assert agent.observe(healthy, provider=TemplateProvider()) == []  # no duplicate incident
 
 
@@ -92,6 +97,11 @@ def test_shadow_mode_changes_nothing(healthy, sources):
     [incident] = agent.observe(healthy, shadow=True, provider=TemplateProvider())
     assert incident.status == "proposed"
     assert releases.active_release(healthy, "hr-assistant")["number"] == 2
+
+    # A shadow proposal must not stop a later real run from acting on the same signal.
+    [real] = agent.observe(healthy, provider=TemplateProvider())
+    assert real.status == "mitigated"
+    assert releases.active_release(healthy, "hr-assistant")["number"] == 1
 
 
 def test_rate_limit_escalates_instead_of_acting_twice(healthy, sources, conn):
@@ -124,6 +134,40 @@ def test_invalid_llm_proposal_is_rejected_and_replaced(healthy, sources):
     [incident] = agent.observe(healthy, provider=_RogueLLM())
     assert incident.diagnosis["action"] == "quarantine"  # deterministic fallback
     assert "LLM proposal rejected" in incident.diagnosis["explanation"]
+
+
+class _WrongActionLLM:
+    """An LLM that proposes an allowlisted action that does not fit the incident."""
+
+    name = "wrong-action"
+
+    def complete_json(self, system, user):
+        target = json.loads(user)["candidate_targets"][0]
+        return {"probable_cause": "x", "action": "rollback", "targets": [target]}
+
+
+def test_llm_action_must_fit_the_incident_kind(conn, sources):
+    _sync(conn, sources)
+    release_with_gate(conn, "hr-assistant", "test")
+    for meta in sorted((sources["confluence-hr"].path / "pages").glob("*.json"))[:10]:
+        meta.unlink()
+    _sync(conn, sources)
+
+    [incident] = agent.observe(conn, provider=_WrongActionLLM())
+    assert incident.kind == "source_frozen"
+    assert incident.diagnosis["action"] == "open_ticket_only"
+    assert releases.active_release(conn, "hr-assistant")["number"] == 1
+
+
+def test_no_good_release_to_return_to_escalates_without_acting(conn, sources):
+    _corrupt_ca_page(sources)
+    (sources["confluence-hr"].path / "pages" / "2002.html").write_text("<h2>Sick</h2><p>-</p>")
+    _sync(conn, sources)
+    assert release_with_gate(conn, "hr-assistant", "test", force=True).status == "forced"
+
+    [incident] = agent.observe(conn, provider=TemplateProvider())
+    assert incident.kind == "active_regression" and incident.status == "escalated"
+    assert releases.active_release(conn, "hr-assistant")["number"] == 1  # untouched
 
 
 def test_circuit_breaker_is_escalated_to_owners(conn, sources):

@@ -40,6 +40,7 @@ def sql_filter(principal: Principal, alias: str = "av") -> tuple[sql.Composed, d
         "  OR ({a}.audience = 'staff' AND {a}.country IN ('GLOBAL', %(p_country)s))"
         "  OR (%(p_role)s = 'hr' AND {a}.audience IN ('staff', 'hr')"
         "      AND (%(p_scope)s = 'global' OR {a}.country IN ('GLOBAL', %(p_country)s)))"
+        "  OR ({a}.audience = 'hr_global' AND %(p_role)s = 'hr' AND %(p_scope)s = 'global')"
         "  OR ({a}.audience = 'owner_only' AND {a}.owner = %(p_email)s)"
         ")"
         " AND NOT ({a}.classification = 'confidential' AND %(p_role)s <> 'hr')"

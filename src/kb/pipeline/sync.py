@@ -8,6 +8,9 @@ previous one missed:
 3. Reconcile   (connector.list_ids() vs the records we hold) -> finds deletions
 
 Every changed record goes through T1 snapshot -> T2 parse -> T3 enrich -> T4 embed.
+Three hashes decide how much work a change needs: body (content), access (permissions
+and classification) and metadata (title, validity...). Only an access change takes the
+fast path; content and metadata changes create new asset versions.
 """
 
 from __future__ import annotations
@@ -48,7 +51,16 @@ def _sha(data: bytes) -> str:
 
 
 def _acl_hash(record: SourceRecord) -> str:
-    return _sha(json.dumps(record.acl_raw, sort_keys=True).encode())
+    """Everything that decides who may read: source permissions and classification."""
+    access = {"acl": record.acl_raw, "classification": record.metadata.get("classification")}
+    return _sha(json.dumps(access, sort_keys=True).encode())
+
+
+def _meta_hash(record: SourceRecord) -> str:
+    """Everything else that ends up in the assets: title, url, validity, language..."""
+    meta = {k: v for k, v in record.metadata.items() if k != "classification"}
+    data = {"title": record.title, "url": record.url, "metadata": meta}
+    return _sha(json.dumps(data, sort_keys=True, default=str).encode())
 
 
 def _date(value: str | None) -> date | None:
@@ -121,25 +133,26 @@ def _read_events(source_id: str, offset: int) -> tuple[list[dict], int]:
 def _process(
     conn: psycopg.Connection, record: SourceRecord, source: SourceConfig, stats: SyncStats
 ) -> None:
-    body_hash, acl_hash = _sha(record.content), _acl_hash(record)
+    body_hash, acl_hash, meta_hash = _sha(record.content), _acl_hash(record), _meta_hash(record)
     current = conn.execute(
-        "SELECT r.status, rv.id, rv.body_hash, rv.acl_hash FROM records r "
+        "SELECT r.status, rv.id, rv.body_hash, rv.acl_hash, rv.meta_hash FROM records r "
         "LEFT JOIN raw_versions rv ON rv.id = r.current_raw_id "
         "WHERE r.source_id = %s AND r.external_id = %s",
         (record.source_id, record.external_id),
     ).fetchone()
 
     is_active = current is not None and current["status"] == "active"
-    if is_active and (current["body_hash"], current["acl_hash"]) == (body_hash, acl_hash):
+    hashes = (body_hash, acl_hash, meta_hash)
+    if is_active and (current["body_hash"], current["acl_hash"], current["meta_hash"]) == hashes:
         stats.unchanged += 1  # a "touch" that changed nothing: skip all processing
         return
 
-    raw_id = _snapshot(conn, record, body_hash, acl_hash)
+    raw_id = _snapshot(conn, record, hashes)
     attrs = map_permissions(record, source)
 
-    if is_active and current["body_hash"] == body_hash:
-        # Fast path: only permissions changed. Update in place, no re-parse, no re-embed,
-        # no new release needed (permissions are evaluated at query time).
+    if is_active and (current["body_hash"], current["meta_hash"]) == (body_hash, meta_hash):
+        # Fast path: only access changed (permissions or classification). Update in place,
+        # no re-parse, no re-embed, no new release needed (access is checked at query time).
         _update_permissions(conn, record, attrs, raw_id)
         stats.permission_only += 1
         audit(
@@ -165,17 +178,16 @@ def _process(
         stats.messages.append(f"{record.external_id}: owner_only ({attrs.note})")
 
 
-def _snapshot(conn: psycopg.Connection, record: SourceRecord, body_hash: str, acl_hash: str) -> int:
+def _snapshot(conn: psycopg.Connection, record: SourceRecord, hashes: tuple[str, ...]) -> int:
     raw_id = conn.execute(
         "INSERT INTO raw_versions (source_id, external_id, source_version, body_hash, acl_hash, "
-        "title, url, mime_type, content, acl_raw, metadata, updated_at) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+        "meta_hash, title, url, mime_type, content, acl_raw, metadata, updated_at) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
         (
             record.source_id,
             record.external_id,
             record.source_version,
-            body_hash,
-            acl_hash,
+            *hashes,
             record.title,
             record.url,
             record.mime_type,
@@ -222,6 +234,26 @@ def _update_permissions(
             "WHERE source_id = %s AND external_id = %s AND status = 'active'",
             (raw_id, record.source_id, record.external_id),
         )
+    _refresh_facts(conn, record, attrs.country)
+
+
+def _refresh_facts(conn: psycopg.Connection, record: SourceRecord, country: str) -> None:
+    """Facts are keyed by country (e.g. vacation_days_per_year:CA): when a record moves to
+    another country, re-extract them, or they would create false conflicts."""
+    versions = conn.execute(
+        "SELECT av.id, av.title, av.content, rv.mime_type, rv.content AS raw "
+        "FROM asset_versions av JOIN raw_versions rv ON rv.id = av.provenance[1] "
+        "WHERE av.source_id = %s AND av.external_id = %s AND av.type = 'knowledge'",
+        (record.source_id, record.external_id),
+    ).fetchall()
+    for v in versions:
+        conn.execute("DELETE FROM asset_facts WHERE asset_version_id = %s", (v["id"],))
+        facts = extract_facts(v["title"], v["content"], country, v["mime_type"], bytes(v["raw"]))
+        for key, value in facts.items():
+            conn.execute(
+                "INSERT INTO asset_facts (asset_version_id, fact_key, value) VALUES (%s, %s, %s)",
+                (v["id"], key, value),
+            )
 
 
 def _supersede(conn: psycopg.Connection, record: SourceRecord) -> list[int]:
@@ -269,13 +301,12 @@ def _build_knowledge_assets(
             "SELECT coalesce(max(version), 0) + 1 AS v FROM asset_versions WHERE asset_id = %s",
             (asset_id,),
         ).fetchone()["v"]
-        version_id = conn.execute(
+        conn.execute(
             "INSERT INTO asset_versions (asset_id, version, type, source_id, external_id, "
             "provenance, title, section_path, content, url, language, owner, department, "
             "country, audience, classification, mapping_note, replaces, valid_from, valid_to, "
             "source_updated_at, last_synced, embedding) VALUES "
-            "(%s,%s,'knowledge',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),%s) "
-            "RETURNING id",
+            "(%s,%s,'knowledge',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),%s)",
             (
                 asset_id,
                 version,
@@ -299,15 +330,7 @@ def _build_knowledge_assets(
                 record.updated_at,
                 vector,
             ),
-        ).fetchone()["id"]
-        facts = extract_facts(
-            record.title, section.text, attrs.country, record.mime_type, record.content
         )
-        for key, value in facts.items():
-            conn.execute(
-                "INSERT INTO asset_facts (asset_version_id, fact_key, value) VALUES (%s, %s, %s)",
-                (version_id, key, value),
-            )
 
 
 # --------------------------------------------------------------------------------------

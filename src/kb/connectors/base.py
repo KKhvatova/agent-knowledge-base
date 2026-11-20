@@ -7,7 +7,6 @@ the connectors knows which system a record came from.
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -28,14 +27,6 @@ class SourceRecord:
     # (pipeline step T3), so a fixed mapping can be re-applied without calling the source.
     acl_raw: dict = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)  # source-specific fields
-    deleted: bool = False
-
-    @property
-    def content_hash(self) -> str:
-        """Hash of content + permissions: if unchanged, the record is not reprocessed."""
-        h = hashlib.sha256(self.content)
-        h.update(repr(sorted(self.acl_raw.items())).encode())
-        return h.hexdigest()
 
 
 class Connector(Protocol):

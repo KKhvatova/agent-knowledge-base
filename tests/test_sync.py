@@ -21,13 +21,17 @@ def _active(conn, external_id):
     ).fetchall()
 
 
-def _edit_page(sources, page_id, *, html=None, groups=None, when="2030-01-01T00:00:00Z"):
+def _edit_page(
+    sources, page_id, *, html=None, groups=None, props=None, when="2030-01-01T00:00:00Z"
+):
     pages: Path = sources["confluence-hr"].path / "pages"
     meta = json.loads((pages / f"{page_id}.json").read_text())
     if html is not None:
         (pages / f"{page_id}.html").write_text(html)
     if groups is not None:
         meta["restrictions"]["read"]["groups"] = groups
+    if props is not None:
+        meta["metadata"].setdefault("properties", {}).update(props)
     meta["version"] = {"number": meta["version"]["number"] + 1, "when": when}
     (pages / f"{page_id}.json").write_text(json.dumps(meta))
 
@@ -70,6 +74,42 @@ def test_permission_only_change_takes_fast_path(conn, sources):
     active = _active(conn, "1001")
     assert [a["id"] for a in active] == ids_before  # same rows: no re-parse, no re-embed
     assert {a["audience"] for a in active} == {"hr"}
+
+
+def test_classification_change_applies_immediately_like_a_permission_change(conn, sources):
+    _sync_all(conn, sources)
+    ids_before = [a["id"] for a in _active(conn, "1001")]
+    _edit_page(sources, "1001", props={"classification": "confidential"})  # text unchanged
+
+    stats = _sync_all(conn, sources)
+    assert stats["confluence-hr"].permission_only == 1
+    active = _active(conn, "1001")
+    assert [a["id"] for a in active] == ids_before
+    assert {a["classification"] for a in active} == {"confidential"}
+
+
+def test_metadata_change_creates_new_versions(conn, sources):
+    _sync_all(conn, sources)
+    _edit_page(sources, "1004", props={"valid_to": "2026-06-30"})  # text unchanged
+
+    stats = _sync_all(conn, sources)
+    assert stats["confluence-hr"].updated == 1
+    assert {str(a["valid_to"]) for a in _active(conn, "1004")} == {"2026-06-30"}
+
+
+def test_permission_change_to_another_country_moves_its_facts(conn, sources):
+    _sync_all(conn, sources)
+    _edit_page(sources, "2001", groups=["staff-us", "hr-us"])  # CA page now for the US
+
+    assert _sync_all(conn, sources)["confluence-hr"].permission_only == 1
+    keys = {
+        r["fact_key"]
+        for r in conn.execute(
+            "SELECT f.fact_key FROM asset_facts f JOIN asset_versions av "
+            "ON av.id = f.asset_version_id WHERE av.external_id = '2001'"
+        ).fetchall()
+    }
+    assert keys == {"vacation_days_per_year:US"}
 
 
 def test_unmapped_permission_falls_back_to_owner_only(conn, sources):
@@ -130,5 +170,5 @@ def test_mass_deletion_trips_circuit_breaker(conn, sources):
         )
         == 16
     )
-    # A frozen source is skipped until someone unfreezes it.
+    # A frozen source stays skipped: unfreezing is a human decision (manual in the POC).
     assert _sync_all(conn, sources)["confluence-hr"].frozen

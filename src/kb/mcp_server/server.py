@@ -2,7 +2,8 @@
 
 Identity: every call carries a token that binds a user to an agent (Context Repo).
 - HTTP transport: `Authorization: Bearer <token>` header.
-- stdio transport (e.g. Claude Desktop): the KB_TOKEN environment variable.
+- stdio transport (e.g. Claude Desktop): the KB_TOKEN environment variable (ignored over
+  HTTP, where every request must carry its own token).
 
 The server returns evidence, not answers: the agent does the reasoning.
 """
@@ -10,6 +11,7 @@ The server returns evidence, not answers: the agent does the reasoning.
 from __future__ import annotations
 
 import os
+import sys
 from datetime import date
 
 from fastmcp import FastMCP
@@ -33,7 +35,9 @@ mcp = FastMCP(
 def _principal(tool: str) -> Principal:
     headers = get_http_headers(include_all=True) or {}
     auth = headers.get("authorization", "")
-    token = auth.removeprefix("Bearer ").strip() or os.environ.get("KB_TOKEN", "")
+    token = auth.removeprefix("Bearer ").strip()
+    if not token and os.environ.get("KB_MCP_TRANSPORT") == "stdio":
+        token = os.environ.get("KB_TOKEN", "")  # one local user per process, e.g. Claude Desktop
     if not token:
         raise PermissionError("Missing token: send 'Authorization: Bearer <token>'.")
     principal = verify_token(token)
@@ -85,6 +89,8 @@ def context_info() -> dict:
 
 def main() -> None:
     transport = os.environ.get("KB_MCP_TRANSPORT", "http")
+    if "KB_JWT_SECRET" not in os.environ:
+        print("WARNING: KB_JWT_SECRET is not set; using the development secret.", file=sys.stderr)
     if transport == "stdio":
         mcp.run(transport="stdio")
     else:

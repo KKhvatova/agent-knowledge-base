@@ -18,7 +18,7 @@ from kb.connectors.base import SourceRecord
 
 @dataclass(frozen=True)
 class AccessAttrs:
-    audience: str  # public | staff | hr | owner_only
+    audience: str  # public | staff | hr | hr_global | owner_only
     country: str  # IT | CA | US | GLOBAL
     classification: str
     owner: str
@@ -55,8 +55,10 @@ def map_permissions(record: SourceRecord, source: SourceConfig) -> AccessAttrs:
 
     entries = [known[p] for p in principals]
     staff = {e["country"] for e in entries if e["audience"] == "staff"}
-    # Global HR can read everything by policy, so "hr-global" never narrows a document.
-    hr = {e["country"] for e in entries if e["audience"] == "hr"} - {"GLOBAL"}
+    # Global HR can read every HR document by policy, so next to a country HR group
+    # "hr-global" adds nothing. On its own it means: global HR only.
+    hr_all = {e["country"] for e in entries if e["audience"] == "hr"}
+    hr = hr_all - {"GLOBAL"}
 
     if staff:
         if len(staff) > 1:
@@ -66,4 +68,8 @@ def map_permissions(record: SourceRecord, source: SourceConfig) -> AccessAttrs:
         return AccessAttrs("staff", staff.pop(), classification, owner)
     if len(hr) > 1:
         return fallback(f"shared with HR of several countries: {sorted(hr)}")
-    return AccessAttrs("hr", hr.pop() if hr else "GLOBAL", classification, owner)
+    if hr:
+        return AccessAttrs("hr", hr.pop(), classification, owner)
+    if hr_all == {"GLOBAL"}:
+        return AccessAttrs("hr_global", "GLOBAL", classification, owner)
+    return fallback(f"no reader group recognised: {principals}")

@@ -1,5 +1,5 @@
 .PHONY: help setup up down reset sync release eval serve observe test lint \
-        demo-update demo-incident demo-rollback token pdf
+        demo-update demo-incident demo-rollback token
 
 help:            ## Show available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/'

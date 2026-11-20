@@ -11,6 +11,7 @@ gates:
   fact_recall_min: 0.85   # expected fact present in the top k results
   acl_leaks_max: 0        # any leak blocks the release
   behaviours_must_pass: true
+  content_min_ratio: 0.5  # a document shrinking below half its size blocks the release
 
 golden:
   # Canada (English)

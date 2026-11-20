@@ -1,8 +1,8 @@
 """Evaluation suite runner: the release gate (DESIGN.md §11.1).
 
 All checks here are deterministic (retrieval, facts, permissions, behaviours), so the
-gate never depends on a model's judgement. An optional LLM judge for answer
-faithfulness is a separate, non-gating step.
+gate never depends on a model's judgement. An LLM judge for answer faithfulness
+(DESIGN.md §11.1) is not implemented in the POC.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ class EvalReport:
             f"{'PASS' if self.passed else 'FAIL'} hit@{m['k']}={m['hit_rate']:.2f} "
             f"fact_recall={m['fact_recall']:.2f} acl_leaks={m['acl_leaks']} "
             f"behaviours={m['behaviours_passed']}/{m['behaviours_total']}"
+            + (f" collapses={m['content_collapses']}" if m.get("content_collapses") else "")
         )
 
     def as_dict(self) -> dict:
@@ -66,6 +67,46 @@ def _records_changed_since_active(
         return set()
     a, b = by_release.values()
     return {rec for rec in a.keys() | b.keys() if a.get(rec) != b.get(rec)}
+
+
+def last_good_release(conn: psycopg.Connection, repo_name: str, before: int) -> dict | None:
+    """Most recent release before `before` that passed its evals without being forced."""
+    return conn.execute(
+        "SELECT * FROM releases WHERE context_repo = %s AND number < %s "
+        "AND status IN ('promoted', 'rolled_back') AND (eval_report->>'passed')::boolean "
+        "AND coalesce((eval_report->>'forced')::boolean, false) = false "
+        "ORDER BY number DESC LIMIT 1",
+        (repo_name, before),
+    ).fetchone()
+
+
+def _content_collapses(
+    conn: psycopg.Connection, repo_name: str, release: dict, min_ratio: float
+) -> list[str]:
+    """Records whose content shrank below `min_ratio` of the last good release.
+
+    The "content collapse" breaker of DESIGN.md §7.4: a truncated export or a parser
+    failing on a new layout loses most of a document, while a real edit rarely does.
+    Fact checks alone can miss it when the lost facts are few or not in the golden set.
+    """
+    good = last_good_release(conn, repo_name, release["number"])
+    if good is None:
+        return []
+    rows = conn.execute(
+        "SELECT ra.release_id, av.source_id || ':' || av.external_id AS record, "
+        "sum(length(av.content)) AS size FROM release_assets ra "
+        "JOIN asset_versions av ON av.id = ra.asset_version_id "
+        "WHERE ra.release_id IN (%s, %s) AND av.type = 'knowledge' GROUP BY 1, 2",
+        (good["id"], release["id"]),
+    ).fetchall()
+    before = {r["record"]: r["size"] for r in rows if r["release_id"] == good["id"]}
+    after = {r["record"]: r["size"] for r in rows if r["release_id"] == release["id"]}
+    return [
+        f"CONTENT COLLAPSE: {rec} went from {before[rec]} to {after[rec]} characters "
+        f"since r{good['number']}"
+        for rec in sorted(before.keys() & after.keys())
+        if after[rec] < min_ratio * before[rec]
+    ]
 
 
 def run_suite(conn: psycopg.Connection, repo_name: str, release: dict) -> EvalReport:
@@ -128,6 +169,10 @@ def run_suite(conn: psycopg.Connection, repo_name: str, release: dict) -> EvalRe
         else:
             failures.append(f"behaviour failed: {case['name']}")
 
+    # 4. Structure: no document may collapse compared with the last good release
+    collapses = _content_collapses(conn, repo_name, release, gates["content_min_ratio"])
+    failures.extend(collapses)
+
     total = len(suite["golden"])
     metrics = {
         "k": k,
@@ -137,11 +182,13 @@ def run_suite(conn: psycopg.Connection, repo_name: str, release: dict) -> EvalRe
         "behaviours_passed": behaviours_passed,
         "behaviours_total": len(suite["behaviours"]),
         "golden_total": total,
+        "content_collapses": len(collapses),
     }
     passed = (
         metrics["hit_rate"] >= gates["hit_rate_min"]
         and metrics["fact_recall"] >= gates["fact_recall_min"]
         and leaks <= gates["acl_leaks_max"]
+        and not collapses
         and (not gates["behaviours_must_pass"] or behaviours_passed == len(suite["behaviours"]))
     )
     return EvalReport(passed=passed, metrics=metrics, failures=failures)

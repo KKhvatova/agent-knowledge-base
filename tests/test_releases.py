@@ -9,7 +9,7 @@ import pytest
 
 from kb.authz.identity import principal_for
 from kb.pipeline.sync import sync_source
-from kb.retrieval import search
+from kb.retrieval import get_asset, search
 from kb.store import releases
 from kb.store.releases import ContextRepo
 
@@ -129,8 +129,18 @@ def test_future_policy_is_announced_and_served_on_its_date(released):
     assert "3 giorni" in january["results"][0]["content"]["text"]
 
 
-def test_out_of_scope_sources_are_never_returned(released, repo, conn):
+def test_out_of_scope_departments_are_never_returned(released, repo, conn):
     # Pretend an engineering doc exists: it is not in the HR assistant's scope.
     conn.execute("UPDATE asset_versions SET department = 'engineering' WHERE external_id = '9002'")
     _release(conn, repo)
     assert "colleagues, customers and partners" not in _texts(conn, LIAM, "code of conduct")
+
+
+def test_get_asset_never_serves_a_version_that_was_not_released(released, sources):
+    _edit(sources, "2001", html="<h2>Entitlement</h2><p>99 days of paid vacation.</p>")
+    _sync(released, sources)  # new version synced, but no release promoted it
+    liam = principal_for(LIAM, "hr-assistant")
+    asset_id = "confluence-hr:2001#entitlement"
+
+    assert "15 days" in get_asset(released, liam, asset_id, version=1)["content"]["text"]
+    assert "error" in get_asset(released, liam, asset_id, version=2)

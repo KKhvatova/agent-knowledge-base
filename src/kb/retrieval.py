@@ -236,7 +236,7 @@ def _freshness_warnings(conn: psycopg.Connection, source_ids: set[str]) -> list[
         if state["last_sync_at"] and datetime.now(UTC) - state["last_sync_at"] > target:
             synced = state["last_sync_at"].strftime("%Y-%m-%d %H:%M")
             warnings.append(
-                f"Source {sid} was last synced at {synced} UTC, " "beyond its freshness target."
+                f"Source {sid} was last synced at {synced} UTC, beyond its freshness target."
             )
     return warnings
 
@@ -277,19 +277,27 @@ def get_asset(
             "WHERE release_id = %(release_id)s) AND av.asset_id = %(asset_id)s"
         )
     else:
-        # Any version of an asset that the active release contains.
+        # An older version, to verify a past citation: only versions that a promoted
+        # release of this Context Repo has served. Versions the gate rejected, or that
+        # no release has published yet, are never served.
         scope = sql.SQL(
             "av.asset_id = %(asset_id)s AND av.version = %(version)s AND "
-            "av.asset_id IN (SELECT a2.asset_id FROM asset_versions a2 JOIN "
-            "release_assets r2 ON r2.asset_version_id = a2.id "
-            "WHERE r2.release_id = %(release_id)s)"
+            "av.id IN (SELECT ra.asset_version_id FROM release_assets ra "
+            "JOIN releases r ON r.id = ra.release_id "
+            "WHERE r.context_repo = %(repo)s AND r.status = 'promoted')"
         )
     row = conn.execute(
         sql.SQL(
             "SELECT av.* FROM asset_versions av WHERE {scope} "
             "AND av.status NOT IN ('tombstoned', 'quarantined') AND {policy}"
         ).format(scope=scope, policy=policy),
-        {**params, "release_id": release["id"], "asset_id": asset_id, "version": version},
+        {
+            **params,
+            "release_id": release["id"],
+            "repo": principal.context_repo,
+            "asset_id": asset_id,
+            "version": version,
+        },
     ).fetchone()
     # Not found and not allowed look the same, so the caller learns nothing either way.
     if row is None or not cedar_allowed(principal, [row])[0]:

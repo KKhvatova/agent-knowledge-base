@@ -57,17 +57,6 @@ def test_deleted_page_disappears_from_list_ids_and_fetch(sources: Path) -> None:
     assert conn.fetch("3004") is None
 
 
-def test_content_hash_changes_with_permissions(sources: Path) -> None:
-    conn = ConfluenceExportConnector(sources / "confluence-hr")
-    before = conn.fetch("1001")
-    meta_path = sources / "confluence-hr" / "pages" / "1001.json"
-    meta = json.loads(meta_path.read_text())
-    meta["restrictions"]["read"]["groups"] = ["hr-it"]
-    meta_path.write_text(json.dumps(meta))
-    after = conn.fetch("1001")
-    assert before and after and before.content_hash != after.content_hash
-
-
 def test_drive_uses_group_emails_as_permissions(sources: Path) -> None:
     conn = DriveFolderConnector(sources / "drive-benefits")
     records, _ = conn.changes(None)

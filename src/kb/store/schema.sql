@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS raw_versions (
     external_id     TEXT NOT NULL,
     source_version  TEXT NOT NULL,
     body_hash       TEXT NOT NULL,          -- content only
-    acl_hash        TEXT NOT NULL,          -- permissions only
+    acl_hash        TEXT NOT NULL,          -- permissions + classification (access)
+    meta_hash       TEXT NOT NULL,          -- title, url and other metadata
     title           TEXT NOT NULL,
     url             TEXT NOT NULL,
     mime_type       TEXT NOT NULL,
@@ -48,7 +49,7 @@ CREATE TABLE IF NOT EXISTS asset_versions (
     owner           TEXT NOT NULL,
     department      TEXT NOT NULL,
     country         TEXT NOT NULL,          -- IT / CA / US / GLOBAL
-    audience        TEXT NOT NULL CHECK (audience IN ('public', 'staff', 'hr', 'owner_only')),
+    audience        TEXT NOT NULL CHECK (audience IN ('public', 'staff', 'hr', 'hr_global', 'owner_only')),
     classification  TEXT NOT NULL CHECK (classification IN ('public', 'internal', 'confidential', 'restricted')),
     mapping_note    TEXT,                   -- why a record fell back to owner_only, if it did
     approved_by     TEXT,                   -- owner approval of a derived confidential asset

@@ -15,7 +15,7 @@ services:
       timeout: 3s
       retries: 30
 
-  # Optional local LLM for the observer's diagnosis and the LLM judge.
+  # Optional local LLM for the observer's diagnosis.
   # Start with: docker compose --profile llm up -d
   # On macOS a native Ollama install is much faster (uses the GPU).
   ollama:

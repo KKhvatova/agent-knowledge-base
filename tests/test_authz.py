@@ -3,6 +3,7 @@ policies, for every user and every asset (DESIGN.md §6.4)."""
 
 from __future__ import annotations
 
+import itertools
 import json
 
 import pytest
@@ -20,19 +21,25 @@ EMAILS = [e["email"] for e in json.loads((ROOT / "data/sources/hris/employees.js
 def synced(conn, sources):
     for cfg in sources.values():
         sync_source(conn, cfg, reconcile=False)
-    # Add synthetic edge cases the fixtures do not contain.
-    conn.execute(
-        "INSERT INTO asset_versions (asset_id, version, type, source_id, external_id, provenance, "
-        "title, section_path, content, url, language, owner, department, country, audience, "
-        "classification, last_synced, source_updated_at) VALUES "
-        "('edge:owner', 1, 'knowledge', 'x', 'owner', '{}', 't', 't', 't', 'u', 'en', "
-        " 'giulia.rossi@shopfully.example', 'people', 'GLOBAL', 'owner_only', 'internal', "
-        " now(), now()),"
-        "('edge:public', 1, 'knowledge', 'x', 'public', '{}', 't', 't', 't', 'u', 'en', "
-        " 'x@example', 'people', 'GLOBAL', 'public', 'public', now(), now()),"
-        "('edge:restricted', 1, 'knowledge', 'x', 'restricted', '{}', 't', 't', 't', 'u', 'en', "
-        " 'x@example', 'people', 'IT', 'hr', 'restricted', now(), now())"
+    # Every combination of the attributes the policies look at, not only the fixtures.
+    combinations = itertools.product(
+        ["public", "staff", "hr", "hr_global", "owner_only"],
+        ["IT", "CA", "US", "GLOBAL"],
+        ["public", "internal", "confidential", "restricted"],
+        ["giulia.rossi@shopfully.example", "nobody@example"],
     )
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO asset_versions (asset_id, version, type, source_id, external_id, "
+            "provenance, title, section_path, content, url, language, owner, department, "
+            "country, audience, classification, last_synced, source_updated_at) VALUES "
+            "(%s, 1, 'knowledge', 'x', %s, '{}', 't', 't', 't', 'u', 'en', %s, 'people', "
+            "%s, %s, %s, now(), now())",
+            [
+                (f"edge:{n}", str(n), owner, country, audience, classification)
+                for n, (audience, country, classification, owner) in enumerate(combinations)
+            ],
+        )
     return conn.execute("SELECT * FROM asset_versions ORDER BY id").fetchall()
 
 
@@ -86,11 +93,32 @@ def test_country_hr_does_not_see_other_countries_hr_content(conn, synced):
 def test_owner_only_fallback_is_visible_to_owner_only(conn, synced):
     def sees(email):
         principal = principal_for(email, "hr-assistant")
-        owner_asset = [a for a in synced if a["asset_id"] == "edge:owner"]
+        owner_asset = [
+            a
+            for a in synced
+            if (a["audience"], a["classification"], a["owner"])
+            == ("owner_only", "internal", "giulia.rossi@shopfully.example")
+        ][:1]
         return cedar_allowed(principal, owner_asset)[0]
 
     assert sees("giulia.rossi@shopfully.example")
     assert not sees("marco.bianchi@shopfully.example")  # not even global HR
+
+
+def test_page_shared_only_with_global_hr_is_for_global_hr_only(conn, sources):
+    pages = sources["confluence-hr"].path / "pages"
+    meta = json.loads((pages / "1006.json").read_text())
+    meta["restrictions"]["read"]["groups"] = ["hr-global"]
+    (pages / "1006.json").write_text(json.dumps(meta))
+    for cfg in sources.values():
+        sync_source(conn, cfg, reconcile=False)
+    assets = conn.execute("SELECT * FROM asset_versions WHERE external_id = '1006'").fetchall()
+
+    def sees(email):
+        return any(cedar_allowed(principal_for(email, "hr-assistant"), assets))
+
+    assert sees("marco.bianchi@shopfully.example")  # HR, global scope
+    assert not sees("ethan.roy@flipp.example")  # HR, Canada only
 
 
 def test_token_round_trip_binds_user_and_agent():
