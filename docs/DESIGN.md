@@ -928,6 +928,67 @@ Every incident ends with one question: **which test would have caught this earli
 
 ## 12. POC vs. production
 
+The POC is an **HR assistant** for employees in Italy, Canada and the United States. It runs locally with no cloud account and no paid API. It keeps the **contracts and the behaviour** of this design (connector contract, asset model, Context Repo releases, Cedar policies, MCP response contract, observer allowlist) and replaces the infrastructure. The repository README has the quickstart and the full list of simplifications.
+
+### 12.1 What the POC demonstrates
+
+Each claim of this design that the POC covers is backed by a test or a demo that anyone can run:
+
+| Design claim | Section | Evidence in the POC |
+|---|---|---|
+| Change detection combines events, polling and reconciliation; unannounced deletions are caught | §4.2 | `test_sync.py`; `scripts/demo.py delete-page` followed by `kb sync --reconcile` |
+| Unchanged records are skipped; a permission-only change takes a fast path | §4.3, §7.1 | `test_sync.py` (content hash, ACL hash) |
+| Deletions and permission restrictions apply immediately to **every version** of a record, including versions pinned by the active release | §7.1 | Two regression tests in `test_releases.py` (both bugs were found while building the POC) |
+| Uncertain permission mappings fall back to `owner_only` | §1.2, §4.5 | `test_sync.py`, `test_authz.py`; `mapping_note` on the asset |
+| Content changes reach agents only through an eval-gated release; releases can be diffed and rolled back | §5.5, §7.3 | `make demo-update`, `kb repo diff`, `kb repo rollback` |
+| The Cedar check and the SQL pre-filter always agree | §6.4 | Parametrised authorization matrix in `test_authz.py` |
+| The same agent gives different, correct answers to different users | §6.3 | MCP server queried with tokens for staff in three countries and an HR user (README) |
+| Retrieved content is marked as untrusted data, with citation, validity, freshness and conflicts | §6.2, §6.5 | `search_knowledge` response |
+| Conflicts between sources are reported with the most recent one marked | §1.2 | US PTO: handbook says 20 days, HRIS table says 15 |
+| Future-dated policies are announced but not applied before their date | §5.4 | `test_releases.py`; Italian smart working policy valid from 2027-01-01 (behaviour check) |
+| LLM-derived assets carry provenance and are invalidated when their source changes; derived confidential content needs owner approval | §5.2, §1.2 | `test_derive.py`; `make demo-update` drops the stale procedure from the next release |
+| Circuit breakers freeze a source on mass deletion | §7.4 | `test_sync.py` |
+| The observer detects, diagnoses, acts only within its allowlist, verifies and reports | §8 | `make demo-incident` (quarantine + ticket), `make demo-rollback` (rollback), `test_observer.py` |
+| An LLM proposal outside the allowlist is never executed | §8.4 | `test_observer.py` |
+
+Baseline on the POC's eval suite: hit@5 = 1.00, fact recall = 1.00, ACL leaks = 0, behaviour checks 3/3.
+
+### 12.2 What is substituted
+
+| Concern | POC | Production (§9.2) |
+|---|---|---|
+| Sources | Files with the shape of Confluence, Drive and HRIS exports, including their permission metadata | Connectors calling the source APIs |
+| Change events | An append-only `events.jsonl` | EventBridge + SQS FIFO |
+| Orchestration | CLI commands (`kb sync`, `kb release`, `kb observe`) | Step Functions, Lambda and ECS tasks, schedules |
+| Raw snapshot | A table of immutable versions | S3 with versioning and Object Lock |
+| Assets, vectors, releases | PostgreSQL 16 + pgvector in Docker | Aurora PostgreSQL + pgvector |
+| Embeddings | Small multilingual model on CPU | Bedrock multilingual embeddings |
+| Derivation | Procedures written by Claude Code during development and stored with the source hash; regex fact extractor for one fact type | Claude on Bedrock with structured output, in the pipeline |
+| Identity | HS256 token issued by a CLI command | Corporate IdP, AgentCore Identity, on-behalf-of tokens |
+| Authorization | `cedarpy` plus a hand-written SQL filter | Verified Permissions / AgentCore Policy; filter generated from the policies |
+| Agent access | FastMCP server on localhost | AgentCore Runtime + Gateway |
+| Observer LLM | Ollama, Anthropic API or a template fallback | Claude on Bedrock |
+| Monitoring, tickets | Audit table, incident files | CloudWatch / OpenTelemetry, ticketing system |
+
+### 12.3 What the POC does not prove
+
+- **Scale and latency.** About 20 documents and 100 assets. Nothing here says how retrieval behaves at a million assets or under concurrent load. The p95 target in §11 is untested.
+- **Real connectors.** Rate limits, pagination, API errors, webhook loss and the real permission models of Confluence and Drive (inheritance, nested groups) are where most production effort goes (§4). The POC only reproduces their shape.
+- **Quality of LLM derivation.** Procedures were written once and reviewed by hand. The design's derivation step, and the LLM judge used to evaluate it (§11.1), are not implemented.
+- **Real identity data.** The POC trusts a clean employee table. Risk 1 in §13 (incomplete or wrong identity data) is exactly what it cannot show.
+- **Real user questions.** The golden set was written by the same person who wrote the data. It catches regressions; it does not measure how well the system serves real people.
+- **Regional data planes, erasure, blue/green re-embedding** (§7.5, §9.2) are design only.
+
+### 12.4 From POC to production
+
+A path that keeps each step useful on its own:
+
+1. **One department, one real source, read-only.** HR Confluence space for one country, through its API, in a non-production AWS account. Goal: validate the permission mapping on real data and measure the share of content that falls back to `owner_only`.
+2. **Real identity.** Connect the corporate IdP and AgentCore Identity; run the authorization matrix against real user attributes.
+3. **Shadow mode.** Run the full pipeline and the observer in shadow mode next to the existing tools; collect real questions to rebuild the golden set.
+4. **First agent in production** for a pilot group, with the eval gate and the observer in active mode.
+5. **More sources and departments**, each through the onboarding checklist (§4.6).
+
 ## 13. Risks
 
 Ranked by how much they worry me, not by how likely they are to come up in a design review.
