@@ -4,7 +4,23 @@
 
 ## 0. Executive summary
 
-_TODO_
+**The problem.** Company knowledge lives in many systems. Each department owns its own, with its own format, update rhythm and access rules. AI agents need this knowledge to be accurate, current and authorized at the moment they use it. Section 1 explains what these three words mean in measurable terms.
+
+**The design.** The system has five layers:
+
+1. **Sources** stay where they are. The system never changes them.
+2. A **raw snapshot** keeps an exact, versioned copy of every source document, together with its access rules. Changes are found in three ways: notifications from the source, regular checks for recent changes, and a full comparison that catches deleted documents.
+3. **Curated assets** are the pieces that agents actually use: text sections, step-by-step procedures, examples. Each one records its owner, who may read it, when it is valid, and which source version it came from.
+4. Each agent gets a **Context Repo**: the assets, tools and instructions it needs, and nothing else. It is published in versions, like software, so versions can be compared and rolled back.
+5. Agents connect through an **MCP server**. It always acts for a specific user and shows only what that user is allowed to see. It returns evidence, not answers: the text, its source, its date, and any disagreement between sources.
+
+**How it stays up to date.** Deletions and permission changes apply at once. New and edited content reaches agents only after automatic tests pass on a new version. Content written by an AI about confidential topics also needs its owner's approval. If a change looks like an error, for example half of a source disappearing at once, that source is frozen. An observer agent watches the system. It can roll back a version, quarantine a document or open a ticket, and nothing else.
+
+**Technology (§9).** The stack is AWS-native:
+
+- ingestion: EventBridge and SQS, Lambda and ECS, Step Functions;
+- storage: S3 for the snapshot, and Aurora PostgreSQL with pgvector as the single store for assets, versions, releases and search;
+- models and access: Bedrock for embeddings and Claude; AgentCore and Verified Permissions for access.
 
 ## 1. Problem framing and requirements
 
@@ -308,18 +324,6 @@ sequenceDiagram
   AG-->>Emp: "You have 7 days left (18 under the Canada policy, updated today, minus 11 taken). Source: Vacation policy – Canada, v7."
   end
 ```
-
-**What each step demonstrates:**
-
-| Steps | Requirement | What happens |
-|---|---|---|
-| 1–5 | *Current* | The change is pushed by a webhook, not discovered by a nightly job. The content hash changed, so the document is reprocessed; unchanged documents are skipped. |
-| 3–4 | *Authorized* | The page restrictions are copied together with the content, in the same version. |
-| 8–9 | *Accurate* | The procedure derived from the old version is invalidated through provenance, so the agent can never mix "15 days" from a stale summary with "18 days" from the new policy. |
-| 10–13 | *Self-maintenance* | The new release is promoted automatically because the evals pass and the source is internal. Release r12 stays available for an instant rollback. |
-| 15–18 | *Authorized* | The search runs on behalf of the employee: Canadian policies only, inside the HR assistant's scope only. |
-| 19–23 | *Authorized + current* | The personal balance is never indexed. It is read live, and only the employee's own record is allowed. |
-| 24–25 | *Accurate* | The answer carries the citation, version and freshness, so the user can verify it and the evals can measure it. |
 
 **What if things go wrong along the way:**
 
