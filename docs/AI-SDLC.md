@@ -51,7 +51,7 @@ The AI did most of the typing. Every decision that shapes the system went throug
 
 ## 3. Testing
 
-The AI wrote tests together with each slice, not afterwards: 60 tests run against a real Postgres. The most important ones:
+The AI wrote tests together with each slice, not afterwards: 61 tests run against a real Postgres. The most important ones:
 
 - **Authorization matrix.** For every test user and every asset, the hand-written SQL filter and the Cedar policies must give the same answer. This is the test that makes a hand-written filter acceptable.
 - **Security regression tests.** While building releases, the AI found that deletions and permission restrictions were applied only to the *active* version of a record. Older versions, still pinned by the active release, kept being served. Both bugs were fixed (the change now applies to every version) and each got a regression test.

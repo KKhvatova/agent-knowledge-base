@@ -60,7 +60,11 @@ def _principal(tool: str) -> Principal:
 
 @mcp.tool
 def search_knowledge(query: str, k: int = 6, as_of: str | None = None) -> dict:
-    """Search company knowledge visible to the signed-in user.
+    """Search the company's HR knowledge base: policies, procedures, benefits, leave,
+    expenses, conduct. Use it for ANY question about work rules, even ones that seem
+    answerable from general knowledge or law: company policy may differ from the law,
+    and the user must get the company's version. Returns only what the signed-in user
+    may see.
 
     Args:
         query: the question or keywords, in any language.
