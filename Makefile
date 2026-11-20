@@ -1,5 +1,5 @@
 .PHONY: help setup up down reset sync release eval serve observe test lint \
-        demo-update demo-incident demo-rollback token
+        demo-update demo-incident demo-rollback token pdf
 
 help:            ## Show available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/'
@@ -66,3 +66,6 @@ demo-rollback:   ## Forced bad release -> observer detects regression -> rollbac
 	uv run kb release --force
 	uv run kb observe
 	uv run kb repo log
+
+pdf:             ## Build docs/build/DESIGN.pdf (needs Google Chrome)
+	uv run python scripts/build_pdf.py

@@ -30,6 +30,7 @@ dev = [
     "pre-commit>=3.8",
     "commitizen>=3.29",
     "fpdf2>=2.9.0",
+    "markdown>=3.11.3",
 ]
 
 [build-system]
