@@ -121,6 +121,7 @@ def search(
     conn.commit()
     return {
         "release": f"{principal.context_repo}@r{release['number']}",
+        "user": _user(principal),
         "as_of": as_of.isoformat(),
         "results": results,
         "warnings": _freshness_warnings(conn, {a["source_id"] for a in top}),
@@ -241,6 +242,18 @@ def _freshness_warnings(conn: psycopg.Connection, source_ids: set[str]) -> list[
     return warnings
 
 
+def _user(principal: Principal) -> dict:
+    """Who the agent is acting for. Without it, an agent cannot tell whether a country's
+    policy applies to the user or is simply the only one it found."""
+    return {
+        "name": principal.name,
+        "country": principal.country,
+        "role": principal.role,
+        "note": "Results include only what this user may see; policies for other "
+        "countries or roles may exist but are not shown.",
+    }
+
+
 def get_leave_balance(conn: psycopg.Connection, principal: Principal) -> dict:
     """Live tool: personal data is read from the HRIS at request time, never indexed.
 
@@ -256,6 +269,7 @@ def get_leave_balance(conn: psycopg.Connection, principal: Principal) -> dict:
     audit(conn, "mcp", "live_read", user=principal.email, tool="get_leave_balance")
     conn.commit()
     return {
+        "user": _user(principal),
         "source": "HRIS (live read)",
         "read_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "balances": [{**r, "remaining": r["entitled"] - r["taken"]} for r in mine],
@@ -313,7 +327,9 @@ def context_info(conn: psycopg.Connection, principal: Principal) -> dict:
     states = conn.execute("SELECT * FROM sync_state ORDER BY source_id").fetchall()
     return {
         "agent": principal.context_repo,
-        "user": {"name": principal.name, "country": principal.country, "role": principal.role},
+        "user": _user(principal),
+        # The agent's instructions are part of the Context Repo, versioned with each release.
+        "instructions": release["instructions"] if release else None,
         "release": None
         if release is None
         else {

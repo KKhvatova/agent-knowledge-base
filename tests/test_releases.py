@@ -144,3 +144,20 @@ def test_get_asset_never_serves_a_version_that_was_not_released(released, source
 
     assert "15 days" in get_asset(released, liam, asset_id, version=1)["content"]["text"]
     assert "error" in get_asset(released, liam, asset_id, version=2)
+
+
+def test_responses_tell_the_agent_who_the_user_is_and_how_to_answer(released):
+    """Found by testing with Claude Desktop: without the user's profile the agent could
+    not tell whether Canadian results applied to the user, and without the Context
+    Repo's instructions it answered from its own knowledge."""
+    from kb.retrieval import context_info, get_leave_balance
+
+    liam = principal_for(LIAM, "hr-assistant")
+    for response in (search(released, liam, "vacation", k=2), get_leave_balance(released, liam)):
+        assert response["user"]["country"] == "CA"
+        assert "only what this user may see" in response["user"]["note"]
+
+    info = context_info(released, liam)
+    active = releases.active_release(released, "hr-assistant")
+    assert info["instructions"] == active["instructions"]  # versioned with the release
+    assert "Use only the evidence" in info["instructions"]
