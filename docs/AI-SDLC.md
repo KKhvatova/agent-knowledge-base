@@ -14,15 +14,19 @@ This document records how AI was used in each phase and who decided what.
 
 ## Who decided what
 
-The AI did most of the typing. Every decision that shapes the system went through me, and several key ones came from me.
+The AI wrote most of the code and the text. I set the direction, made every design decision, tested the result as a user would, and edited every document before it was published.
 
-| Area | Came from me |
+| Area | My contribution |
 |---|---|
 | Overall approach | Start from context-engineering practice: versioned context per agent workflow, not a single index |
+| Design decisions | Answered about 50 questions in the design interview, one decision at a time; each answer became part of the design and of the ADRs |
 | Self-maintenance | **Data versioning with rollback** as a hard requirement; an **observer agent** that intervenes when something goes wrong |
-| Accuracy | When sources conflict, show both and **name the most recent one** (I combined two of the proposed options) |
+| Accuracy | When sources conflict, show both and **name the most recent one** |
 | Stack | Python, Claude, **AWS** for production, freedom to differ in the POC |
-| POC scope | HR scenario, synthetic data (the public website was planned, then left out), MCP as the interface, local execution |
+| POC scope | HR scenario, synthetic data, MCP as the interface, local execution, **no paid API key**, so anyone can run it |
+| Quality control | Asked for a **full review of the repository** before testing it with a real agent. The review found permission bugs (an unreleased version could be served, a new audience was missing) and a gap in the release gate, all fixed with tests |
+| Real-agent testing | **Tested the POC myself in Claude Desktop** as three employees (Canada, US, HR Italy). This showed that the agent did not know who the user was and did not search for general-sounding questions; both were fixed |
+| The design document | **Designed the final document myself**, based on the full project: I kept only the most important parts and wrote them short and easy to understand, in three pages that answer the eight questions of the brief, with diagrams in an appendix |
 | Engineering practice | Conventional Commits checked by **Commitizen** (light version: check only, no version bump) |
 
 ## 1. Design
