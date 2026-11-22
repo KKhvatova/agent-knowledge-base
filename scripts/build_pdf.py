@@ -25,7 +25,7 @@ CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacO
 MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"
 
 CSS = """
-@page { size: A4; margin: 14mm 15mm 14mm 15mm; }
+@page { size: A4; margin: 12mm 15mm 12mm 15mm; }
 body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 10pt;
        line-height: 1.4; color: #1a1a1a; }
 h1 { font-size: 20pt; margin: 0 0 6pt; }

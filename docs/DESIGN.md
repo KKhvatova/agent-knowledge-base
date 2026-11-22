@@ -84,7 +84,7 @@ Managed AWS services for infrastructure; own code where the value is (permission
 - **Copy vs live reads**: fast search even when a source is down, but the copy can be minutes old and must be protected.
 - **One database**: permissions, versions and search always agree, because they live in the same place. The cost is search quality that is good but not the best available, and a limit of roughly 50 million text chunks before search must move to a dedicated engine.
 - **Tests before publishing**: errors caught before users, for minutes of delay and a test set to maintain.
-- **Deny by default**: no leak from mapping errors, but some documents are under-shared until fixed.
+- **Deny by default**: a permission mapping error can never cause a leak, but until the mapping is fixed some documents are visible to fewer people than they should be.
 
 ## 8. Quality evaluation
 
