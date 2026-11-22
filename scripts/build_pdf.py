@@ -25,14 +25,12 @@ CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacO
 MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"
 
 CSS = """
-@page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+@page { size: A4; margin: 14mm 15mm 14mm 15mm; }
 body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 10pt;
-       line-height: 1.45; color: #1a1a1a; }
+       line-height: 1.4; color: #1a1a1a; }
 h1 { font-size: 20pt; margin: 0 0 6pt; }
-h2 { font-size: 14pt; margin: 18pt 0 6pt; border-bottom: 1px solid #ccc; padding-bottom: 3pt;
+h2 { font-size: 13pt; margin: 11pt 0 4pt; border-bottom: 1px solid #ccc; padding-bottom: 2pt;
      break-after: avoid; }
-h2 { break-before: page; }
-h2:first-of-type { break-before: auto; }
 h3 { font-size: 11.5pt; margin: 12pt 0 4pt; break-after: avoid; }
 p, li { orphans: 3; widows: 3; }
 blockquote { margin: 6pt 0; padding: 4pt 10pt; border-left: 3px solid #999; color: #444; }
@@ -48,10 +46,11 @@ pre.mermaid { background: none; border: none; text-align: center; padding: 0; ma
 pre.mermaid svg { max-width: 100%; height: auto; }
 /* Large diagrams get a page of their own, sized to fill it. */
 @page wide { size: A4 landscape; margin: 10mm; }
-.diagram-wide { page: wide; break-before: page; break-after: page; }
+.diagram-wide { page: wide; break-after: page; }
 .diagram-wide svg { max-height: 185mm; }
-.diagram-full { break-before: page; break-after: page; }
-.diagram-full svg { max-height: 255mm; }
+.diagram { break-before: page; }
+.diagram-full { break-after: page; }
+.diagram-full svg { max-height: 245mm; }
 a { color: #1a4fa0; text-decoration: none; }
 """
 
@@ -78,9 +77,15 @@ def build_html() -> str:
             # The system diagram is very wide: top-to-bottom fits a portrait page.
             block = block.replace("flowchart LR", "flowchart TB", 1)
             layout = "diagram-full"
-        body = body.replace(
-            f"<p>MERMAID-BLOCK-{i}</p>",
-            f'<div class="{layout}"><pre class="mermaid">{html.escape(block)}</pre></div>',
+        # Keep a diagram's heading and caption on the same page as the diagram.
+        body = re.sub(
+            rf"((?:<h2[^>]*>[^<]*</h2>\s*)?(?:<h3[^>]*>[^<]*</h3>\s*)?(?:<p>[^<]*</p>\s*)?)"
+            rf"<p>MERMAID-BLOCK-{i}</p>",
+            lambda m, b=block, c=layout: (
+                f'<div class="diagram {c}">{m.group(1)}'
+                f'<pre class="mermaid">{html.escape(b)}</pre></div>'
+            ),
+            body,
         )
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>Agent Knowledge Base: System Design</title>
