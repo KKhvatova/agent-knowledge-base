@@ -71,7 +71,7 @@ Managed AWS services for infrastructure; own code where the value is (permission
 | Change events | EventBridge, SQS FIFO: ordering per record, retries, serverless | Kafka / Kinesis: too heavy for ~100k changes a day |
 | Connectors, pipeline | Lambda, ECS Fargate, Step Functions: visible state per document | Airflow: designed for nightly batch jobs, not thousands of small per-document runs; AppFlow: copies the data but not who may see it |
 | Raw snapshot | S3 with versioning: cheap, durable, versioned | Raw content in the database: costly |
-| Assets, versions, search | Aurora PostgreSQL with pgvector and full-text: permissions, versions and search in one query | OpenSearch: a second store to keep consistent (first option to scale search); Kendra: costly, opaque |
+| Assets, versions, search | Aurora PostgreSQL with pgvector and full-text: permissions, versions and search in one query | OpenSearch: a second store to keep consistent (first option to scale search) |
 | Embeddings, LLM | Bedrock (multilingual embeddings, Claude): data stays in the account and region | External APIs: one more data processor; self-hosting: GPU operations |
 | Agent access | MCP server on AgentCore Runtime and Gateway: any framework can connect | Custom REST API: one adapter per framework |
 | Identity, permissions | IdP with AgentCore Identity; Cedar in Verified Permissions: testable policies | Broad service accounts; OPA: no managed service |
