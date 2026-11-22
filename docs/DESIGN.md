@@ -13,7 +13,7 @@ None of these figures come from ShopFully or Flipp; they are plausible orders of
 
 ## 1. Architecture
 
-Five layers, each with one job (Appendix A):
+Five layers, each with one job ([Appendix A](#a-system-diagram)):
 
 1. **Sources**: department systems. They remain the system of record; nothing is written back to them.
 2. **Raw snapshot**: an exact, versioned copy of every source record with its access rules, used for citations, audit, rollback and reprocessing.
@@ -21,9 +21,9 @@ Five layers, each with one job (Appendix A):
 4. **Context Repos**: one per agent, listing the assets, tools and instructions it may use. Published in numbered releases, like software: a release goes live only if its tests pass, and can be rolled back.
 5. **Access layer**: an MCP server that agents call on behalf of a signed-in user. It checks permissions and returns evidence.
 
-Across all layers, **observability**: connectors, release tests and the MCP server send metrics and traces to CloudWatch. An observer agent watches them and, when something breaks, rolls back a release, quarantines a document or pauses a connector, and calls a human for anything else (Section 5, Appendix E).
+Across all layers, **observability**: connectors, release tests and the MCP server send metrics and traces to CloudWatch. An observer agent watches them and, when something breaks, rolls back a release, quarantines a document or pauses a connector, and calls a human for anything else (Section 5, [Appendix E](#e-observer-agent)).
 
-Changes flow from source to snapshot, to assets, to a new release. Questions flow back: agent, MCP server, permission check, search in the agent's release, results with sources (Appendix B). Data that changes constantly or is personal (a leave balance, a salary) is not copied: it is read live from the source.
+Changes flow from source to snapshot, to assets, to a new release. Questions flow back: agent, MCP server, permission check, search in the agent's release, results with sources ([Appendix B](#b-data-flow-a-policy-change-and-a-question)). Data that changes constantly or is personal (a leave balance, a salary) is not copied: it is read live from the source.
 
 ## 2. Data connection
 
@@ -36,14 +36,14 @@ Changes flow from source to snapshot, to assets, to a new release. Questions flo
 
 - **Typed assets**: knowledge (a document section), procedure (steps derived by an LLM), tool (a live data source), example (a validated question and answer).
 - **The same metadata on every asset**: owner, department, country, sensitivity, validity dates, and the exact source version it came from. Versions are never overwritten; when a source changes, procedures derived from it are regenerated.
-- **Shared entities relate departments**: employee, team, country, product, customer, each with one system of record. "Product X" in Jira and in Salesforce is the same entity, so a roadmap agent can connect them. A few relational tables, not a full knowledge graph (Appendix C).
+- **Shared entities relate departments**: employee, team, country, product, customer, each with one system of record. "Product X" in Jira and in Salesforce is the same entity, so a roadmap agent can connect them. A few relational tables, not a full knowledge graph ([Appendix C](#c-data-model)).
 - **Two dates**: when a text changed, and when a rule applies. A policy valid from January is announced in November, not served as today's rule.
 - **One scope per agent**: an HR assistant cannot reach Sales data, even if the user could. Less noise, less risk.
 
 ## 4. Agent access
 
 - **MCP**, the standard most agent frameworks speak: search knowledge, get an asset, live tools (e.g. leave balance), context information.
-- **Always on behalf of a user.** Every call carries a short-lived token naming the user and the agent (Appendix D). The agent never sees more than the user, nor more than its Context Repo.
+- **Always on behalf of a user.** Every call carries a short-lived token naming the user and the agent ([Appendix D](#d-identity-on-behalf-of-the-user)). The agent never sees more than the user, nor more than its Context Repo.
 - **Permissions checked twice on every request.** Cedar policies are applied as a filter inside the search, so forbidden content is never ranked, then checked again on each result. Highly sensitive content is also checked live against the source.
 - **Evidence, not answers**: text, source and version, validity dates, freshness. When sources disagree, the agent gets both, with the most recent marked, and tells the user.
 - **Prompt injection**: retrieved text is marked as data, never instructions. The main defence is authorization: a manipulated agent still cannot obtain what the user may not see.
@@ -58,7 +58,7 @@ Changes flow from source to snapshot, to assets, to a new release. Questions flo
 
 - **Releases**: changes are grouped every few minutes per agent and promoted automatically if the tests pass; otherwise agents keep the previous release.
 - **Circuit breakers** stop changes that look like failures (mass deletion, permissions suddenly widened, documents shrinking sharply): the source is frozen and its owner asked.
-- **Observer agent** (Appendix E): rules detect problems, an LLM explains the cause. It can only roll back, quarantine a document or open a ticket, then checks that metrics recovered.
+- **Observer agent** ([Appendix E](#e-observer-agent)): rules detect problems, an LLM explains the cause. It can only roll back, quarantine a document or open a ticket, then checks that metrics recovered.
 
 So "without manual intervention" holds for the normal case; anomalies and AI-written confidential content need a human.
 
