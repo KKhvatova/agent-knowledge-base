@@ -4,7 +4,7 @@ Every source expresses permissions differently (Confluence group names, Drive gr
 e-mails, HRIS country visibility). This step maps them into two attributes used by the
 Cedar policies: `audience` (who may read) and `country`.
 
-The mapping is lossy by nature (DESIGN.md §1.2). When it cannot translate a permission
+The mapping is lossy by nature (DESIGN.md §2). When it cannot translate a permission
 with certainty, it falls back to `owner_only`: coverage is lost, security never is.
 """
 

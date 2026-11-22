@@ -581,7 +581,7 @@ LEAVE_BALANCES: list[dict] = [
     {"employee_id": "E004", "year": 2026, "leave_type": "vacation", "entitled": 26, "taken": 20},
 ]
 
-# Structured, non-personal, rarely changing: indexed as knowledge (see DESIGN §1.2).
+# Structured, non-personal, rarely changing: indexed as knowledge (see DESIGN §1).
 # The US row deliberately conflicts with the US handbook (20 days) and is more recent.
 LEAVE_POLICY_TABLE: list[dict] = [
     {

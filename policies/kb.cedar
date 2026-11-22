@@ -1,4 +1,4 @@
-// Authorization policies for the knowledge base (DESIGN.md §6.4).
+// Authorization policies for the knowledge base (DESIGN.md §4).
 // The same file would be loaded into Amazon Verified Permissions in production.
 //
 // Principal: Employee  { email, country, role ("employee" | "hr"), hr_scope ("country" | "global") }
@@ -32,7 +32,7 @@ when {
 };
 
 // Deny-by-default fallback: when a source permission could not be mapped with
-// certainty, only the content owner can read it (DESIGN.md §1.2).
+// certainty, only the content owner can read it (DESIGN.md §2).
 permit (principal is Employee, action == Action::"read", resource is Asset)
 when { resource.audience == "owner_only" && resource.owner == principal.email };
 

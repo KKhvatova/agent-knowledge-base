@@ -1,4 +1,4 @@
-"""Authorization, enforced in two steps (DESIGN.md §6.4).
+"""Authorization, enforced in two steps (DESIGN.md §4).
 
 1. Before ranking: the policies are translated into a SQL filter, applied INSIDE the
    search query, so unauthorized assets are never scored.

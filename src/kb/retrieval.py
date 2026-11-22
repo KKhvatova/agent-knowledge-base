@@ -1,4 +1,4 @@
-"""Retrieval: hybrid search over the active release, filtered by policy (DESIGN.md §6).
+"""Retrieval: hybrid search over the active release, filtered by policy (DESIGN.md §4).
 
 What an agent sees is the intersection of:
 - the Context Repo's active release (scope + pinned versions),
@@ -7,7 +7,7 @@ What an agent sees is the intersection of:
 - the user's permissions (SQL filter before ranking + Cedar check after).
 
 The response carries the evidence an agent needs to judge each result: citation,
-version, validity, freshness, future versions and warnings (DESIGN.md §6.2).
+version, validity, freshness, future versions and warnings (DESIGN.md §4).
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ def _to_result(
         "asset_id": asset["asset_id"],
         "version": asset["version"],
         "type": asset["type"],
-        # Retrieved content is data, never instructions (DESIGN.md §6.5).
+        # Retrieved content is data, never instructions (DESIGN.md §4).
         "content": {"trust": "untrusted_source_data", "text": asset["content"]},
         "citation": {
             "title": asset["title"],
@@ -155,7 +155,7 @@ def _to_result(
 def _conflicts(
     conn: psycopg.Connection, principal: Principal, release: dict, asset: dict, as_of: date
 ) -> list[dict]:
-    """Other visible assets stating a different value for the same fact (DESIGN.md §1.2).
+    """Other visible assets stating a different value for the same fact (DESIGN.md §4).
 
     No authority rule is configured in the POC, so every conflict is shown to the agent,
     with the most recently changed source marked as a hint, not a verdict.
@@ -201,7 +201,7 @@ def _conflicts(
 def _future_version(
     conn: psycopg.Connection, principal: Principal, release: dict, asset: dict, as_of: date
 ) -> dict | None:
-    """Is there a visible document that replaces this one later? (DESIGN.md §5.4)"""
+    """Is there a visible document that replaces this one later? (DESIGN.md §3)"""
     policy, params = sql_filter(principal)
     row = conn.execute(
         sql.SQL(

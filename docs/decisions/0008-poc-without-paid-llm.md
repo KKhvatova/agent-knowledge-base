@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-11-19
-- **Design:** [DESIGN §12](../DESIGN.md#12-poc-vs-production)
+- **Design:** [README: POC vs production](../../README.md#poc-vs-production)
 
 ## Context
 
@@ -24,5 +24,5 @@ The POC must be easy for an evaluator to run, and must not depend on credentials
 ## Consequences
 
 - `make setup` is the only step needed. Tests are deterministic; demos are too with `KB_LLM=template` (otherwise the observer's wording comes from the LLM).
-- Derivation quality and scale are not demonstrated (DESIGN §12.3).
-- Every substitution is listed in the README and in DESIGN §12.2.
+- Derivation quality and scale are not demonstrated.
+- Every substitution is listed in the README.

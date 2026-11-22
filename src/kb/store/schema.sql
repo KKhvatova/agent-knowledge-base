@@ -1,4 +1,4 @@
--- Knowledge store schema (DESIGN.md §5). Idempotent: safe to run on every start.
+-- Knowledge store schema (DESIGN.md §3). Idempotent: safe to run on every start.
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Layer 2: Raw Snapshot. Immutable: one row per observed version of a source record.
@@ -72,7 +72,7 @@ CREATE INDEX IF NOT EXISTS asset_versions_tsv ON asset_versions USING gin (tsv);
 CREATE INDEX IF NOT EXISTS asset_versions_embedding ON asset_versions USING hnsw (embedding vector_cosine_ops);
 
 -- Facts extracted during curation, used to detect conflicts between sources
--- (DESIGN.md §1.2). POC: one deterministic extractor; production: entity layer + LLM.
+-- (DESIGN.md §3). POC: one deterministic extractor; production: entity layer + LLM.
 CREATE TABLE IF NOT EXISTS asset_facts (
     asset_version_id BIGINT NOT NULL REFERENCES asset_versions (id),
     fact_key         TEXT NOT NULL,         -- e.g. vacation_days_per_year:US
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS releases (
     status          TEXT NOT NULL CHECK (status IN ('candidate', 'promoted', 'rejected', 'rolled_back')),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_by      TEXT NOT NULL,
-    manifest        JSONB NOT NULL,         -- pinned with the release (DESIGN.md §5.5)
+    manifest        JSONB NOT NULL,         -- pinned with the release (DESIGN.md §1)
     instructions    TEXT NOT NULL,          -- the agent's prompt, pinned with the release
     eval_report     JSONB,
     note            TEXT,
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS sync_state (
     last_sync_at    TIMESTAMPTZ
 );
 
--- Incidents opened by the observer agent (DESIGN.md §8).
+-- Incidents opened by the observer agent (DESIGN.md §5).
 CREATE TABLE IF NOT EXISTS incidents (
     id              BIGSERIAL PRIMARY KEY,
     opened_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS incidents (
     UNIQUE (kind, target, signal_ref)
 );
 
--- Everything that changes state is recorded here (DESIGN.md §6.6, §7.3).
+-- Everything that changes state is recorded here (DESIGN.md §1, §5).
 CREATE TABLE IF NOT EXISTS audit_log (
     id              BIGSERIAL PRIMARY KEY,
     at              TIMESTAMPTZ NOT NULL DEFAULT now(),

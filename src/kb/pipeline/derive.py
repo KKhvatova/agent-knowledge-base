@@ -1,4 +1,4 @@
-"""T5 Derive: publish LLM-derived Procedure assets with provenance (DESIGN.md §5.1, §5.2).
+"""T5 Derive: publish LLM-derived Procedure assets with provenance (DESIGN.md §3).
 
 POC simplification: procedures are fixtures in data/derived/procedures.yaml, written by
 an LLM (Claude Code) during development, each with the hash of the source version it

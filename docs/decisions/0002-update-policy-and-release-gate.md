@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-11-19
-- **Design:** [DESIGN §1.2, §7](../DESIGN.md#7-self-maintenance)
+- **Design:** [DESIGN §5](../DESIGN.md#5-self-maintenance)
 
 ## Context
 
@@ -27,6 +27,6 @@ Not all changes carry the same risk. A deletion or a permission restriction must
 ## Consequences
 
 - Minutes of extra lag for edits; zero extra lag for removals of access.
-- The eval suite becomes part of the product, and must be maintained. Golden questions go stale when policies change legitimately: failures on records changed in the release are flagged for the owner to re-confirm, not excused (DESIGN §11.1).
+- The eval suite becomes part of the product, and must be maintained. Golden questions go stale when policies change legitimately: failures on records changed in the release are flagged for the owner to re-confirm, not excused.
 - Owners have a small, bounded approval duty, limited to derived content on sensitive sources.
 - **In the POC:** `kb release` (gate in `src/kb/evals/gate.py`); `test_releases.py` (immediate deletion and restriction on pinned versions); `test_derive.py` (stale on change, owner approval); `test_sync.py` (circuit breaker); `make demo-update`.

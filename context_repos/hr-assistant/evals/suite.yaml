@@ -1,8 +1,8 @@
-# Evaluation suite for the hr-assistant Context Repo (DESIGN.md §11.1).
+# Evaluation suite for the hr-assistant Context Repo (DESIGN.md §8).
 # Run on every candidate release; the release is promoted only if every gate passes.
 #
 # Golden questions point to a source record and a fact, not to a fixed answer text, so
-# when a policy changes only the expected fact needs re-confirming (DESIGN.md §11.1).
+# when a policy changes only the expected fact needs re-confirming.
 
 k: 5
 

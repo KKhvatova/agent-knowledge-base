@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-11-19
-- **Design:** [DESIGN §8](../DESIGN.md#8-observer-agent)
+- **Design:** [DESIGN §5](../DESIGN.md#5-self-maintenance)
 
 ## Context
 

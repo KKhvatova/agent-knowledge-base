@@ -1,4 +1,4 @@
-"""Release gate: build a candidate, evaluate it, promote only if it passes (DESIGN.md §7.2)."""
+"""Release gate: build a candidate, evaluate it, promote only if it passes (DESIGN.md §5)."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def release_with_gate(
         status = "promoted"
     elif force:
         # Emergency bypass: allowed, but recorded. The observer's scheduled evals will
-        # catch a regression in the active release and can roll it back (DESIGN.md §8).
+        # catch a regression in the active release and can roll it back (DESIGN.md §5).
         releases.promote(conn, candidate, {**report.as_dict(), "forced": True}, actor)
         audit(
             conn,

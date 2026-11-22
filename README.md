@@ -199,9 +199,9 @@ Every component maps to a production component in [`docs/DESIGN.md`](docs/DESIGN
 
 - **Eval baseline:** hit@5 = 1.00, fact recall = 1.00, ACL leaks = 0, behaviours 3/3 on 16 golden questions, 6 ACL probes and 3 behaviour checks. The derived procedures moved fact recall from 0.94 to 1.00.
 - **Small golden set.** It is written by the same person who wrote the data, so it measures regressions, not real-world quality.
-- **Ranking is not always ideal.** With a very small `k`, generic sections ("Carry-over", "How to request") can outrank the entitlement section. Hybrid search with RRF and no reranker is the reason. Production adds a reranker (DESIGN §9.3).
+- **Ranking is not always ideal.** With a very small `k`, generic sections ("Carry-over", "How to request") can outrank the entitlement section. Hybrid search with RRF and no reranker is the reason. Production adds a reranker.
 - **Instructions are guidance in generic clients.** In Claude Desktop or Claude Code the Context Repo instructions reach the agent as MCP server instructions, not as its system prompt, so the client's model may still add general knowledge (clearly labelled, in our tests). An agent built for this Context Repo uses them as its system prompt.
-- **Golden questions go stale.** After the legitimate 15→18 edit in `make demo-update`, the golden fact "15 days" no longer holds. The runner cannot tell a legitimate edit from corruption, so it **flags** the failure for the owner to re-confirm instead of excusing it (DESIGN §11).
+- **Golden questions go stale.** After the legitimate 15→18 edit in `make demo-update`, the golden fact "15 days" no longer holds. The runner cannot tell a legitimate edit from corruption, so it **flags** the failure for the owner to re-confirm instead of excusing it.
 
 ## Configuration
 

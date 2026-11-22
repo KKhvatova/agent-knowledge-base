@@ -1,4 +1,4 @@
-"""Context Repos and releases (DESIGN.md §5.5, §7.2, §7.3).
+"""Context Repos and releases (DESIGN.md §1, §5).
 
 A release pins exact asset versions, plus the manifest and the agent's instructions.
 Agents only ever see the active release, so:

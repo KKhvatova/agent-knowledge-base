@@ -116,7 +116,7 @@ class HrisPolicyTableConnector:
     """HRIS leave-policy table: one record per (country, leave type).
 
     This table is non-personal and rarely changes, so it is *indexed* as knowledge
-    (DESIGN §1.2). Personal data such as leave balances is never indexed: it is read
+    (DESIGN §1). Personal data such as leave balances is never indexed: it is read
     live by the `get_leave_balance` tool instead.
     """
 

@@ -4,7 +4,7 @@ Each change is written the way a real source would expose it: the page changes i
 "Confluence export" and a webhook-like event is appended to events.jsonl.
 
 Usage:
-  uv run python scripts/demo.py edit-policy       # CA vacation 15 -> 18 days (DESIGN §3.3)
+  uv run python scripts/demo.py edit-policy       # CA vacation 15 -> 18 days (DESIGN Appendix B)
   uv run python scripts/demo.py corrupt-handbook  # CA page loses sections (parse failure)
   uv run python scripts/demo.py delete-page       # US hybrid-work page deleted, no event
   uv run python scripts/demo.py restrict-page     # IT leave page restricted to HR only

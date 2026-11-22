@@ -1,7 +1,7 @@
 """T4 Embed: multilingual sentence embeddings, computed locally with fastembed.
 
 POC simplification: a small local model (384 dimensions) instead of a managed
-embedding model on Bedrock (DESIGN.md §9.2). No API key, no GPU needed.
+embedding model on Bedrock (DESIGN.md §6). No API key, no GPU needed.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-11-19
-- **Design:** [DESIGN §6.3, §6.4](../DESIGN.md#6-agent-access)
+- **Design:** [DESIGN §4](../DESIGN.md#4-agent-access)
 
 ## Context
 
@@ -24,7 +24,7 @@ An agent must never see more than the user it works for. Source permission model
 
 ## Consequences
 
-- Authorization quality depends on identity data quality (DESIGN §13, risk 1).
+- Authorization quality depends on identity data quality (DESIGN, Main risks, 1).
 - Some content is under-shared until its mapping is fixed; the share of `owner_only` content is a monitored metric.
 - The pre-filter must stay equivalent to the policies. In production it is generated from them (Cedar partial evaluation); in the POC it is written by hand and checked by a test matrix.
 - **In the POC:** `policies/kb.cedar`, `src/kb/authz/` (`cedarpy` + SQL filter), JWT issued by `kb token`; `test_authz.py` (Cedar vs SQL agreement for every user and every asset).

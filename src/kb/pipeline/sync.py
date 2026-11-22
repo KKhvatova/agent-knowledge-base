@@ -1,4 +1,4 @@
-"""Sync a source into the knowledge store (DESIGN.md §4.2, §4.3, §7.1).
+"""Sync a source into the knowledge store (DESIGN.md §2, §5).
 
 One sync run uses up to three change-detection mechanisms, each catching what the
 previous one missed:
@@ -268,7 +268,7 @@ def _supersede(conn: psycopg.Connection, record: SourceRecord) -> list[int]:
 
 
 def _mark_derived_stale(conn: psycopg.Connection, old_raw_ids: list[int]) -> None:
-    """Invalidation cascades through provenance (DESIGN.md §5.2)."""
+    """Invalidation cascades through provenance (DESIGN.md §3)."""
     if old_raw_ids:
         conn.execute(
             "UPDATE asset_versions SET status = 'stale' "
@@ -341,7 +341,7 @@ def _build_knowledge_assets(
 def _tombstone(
     conn: psycopg.Connection, source_id: str, external_id: str, stats: SyncStats, reason: str
 ) -> None:
-    """Deletions take effect immediately, before any new release (DESIGN.md §7.1)."""
+    """Deletions take effect immediately, before any new release (DESIGN.md §5)."""
     updated = conn.execute(
         "UPDATE records SET status = 'tombstoned', tombstoned_at = now() "
         "WHERE source_id = %s AND external_id = %s AND status = 'active' RETURNING current_raw_id",
@@ -383,7 +383,7 @@ def _reconcile(
 
     ratio = len(missing) / len(active)
     if ratio > source.max_delete_ratio:
-        # Circuit breaker (DESIGN.md §7.4): this looks like a failure, not a real change.
+        # Circuit breaker (DESIGN.md §5): this looks like a failure, not a real change.
         reason = (
             f"reconciliation would delete {len(missing)}/{len(active)} records "
             f"({ratio:.0%} > {source.max_delete_ratio:.0%})"

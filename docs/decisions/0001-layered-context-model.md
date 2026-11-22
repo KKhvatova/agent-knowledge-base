@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-11-19
-- **Design:** [DESIGN §3.1, §5](../DESIGN.md#3-architecture)
+- **Design:** [DESIGN §1, §3](../DESIGN.md#1-architecture)
 
 ## Context
 
@@ -21,13 +21,13 @@ Separate five layers, each with one job:
 ## Alternatives considered
 
 - **Single index, re-built on change.** Simplest, and enough for a demo. No history, no provenance, no per-agent rollback, no way to tell a parsing error from a source error.
-- **Managed knowledge base product** (Bedrock Knowledge Bases, Amazon Quick). Covers ingestion and retrieval well; versioning, derived assets, per-workflow releases and eval-gated promotion are outside its model (DESIGN §9.1).
-- **Knowledge graph as the core.** Powerful for multi-hop questions, expensive to maintain, and not what the first agents need (DESIGN §5.3).
+- **Managed knowledge base product** (Bedrock Knowledge Bases, Amazon Quick). Covers ingestion and retrieval well; versioning, derived assets, per-workflow releases and eval-gated promotion are outside its model (DESIGN §6).
+- **Knowledge graph as the core.** Powerful for multi-hop questions, expensive to maintain, and not what the first agents need (DESIGN §3).
 
 ## Consequences
 
 - Every answer can be traced back: asset version → raw version → source record.
-- Rollback is cheap at every level: a release, an asset, or a whole source (DESIGN §7.3).
+- Rollback is cheap at every level: a release, an asset, or a whole source (DESIGN §5).
 - Re-processing is possible without touching sources: change a parser or an embedding model, rebuild assets from the snapshot.
 - More storage and more moving parts than a single index. Acceptable because each layer is simple on its own.
 - **In the POC:** `raw_versions`, `asset_versions` (with `provenance`), `releases` + `release_assets`, `context_repos/hr-assistant/manifest.yaml`.

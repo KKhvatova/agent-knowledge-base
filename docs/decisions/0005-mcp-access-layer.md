@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-11-19
-- **Design:** [DESIGN §6.1, §6.2](../DESIGN.md#6-agent-access)
+- **Design:** [DESIGN §4](../DESIGN.md#4-agent-access)
 
 ## Context
 

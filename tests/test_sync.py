@@ -1,6 +1,6 @@
 """Self-maintenance: additions, modifications, permission changes and deletions
 propagate without manual intervention, and anomalies trip the circuit breaker
-(DESIGN.md §4.2, §4.3, §7.1, §7.4)."""
+(DESIGN.md §2, §5)."""
 
 from __future__ import annotations
 

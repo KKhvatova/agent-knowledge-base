@@ -1,5 +1,5 @@
 """Authorization: the SQL filter must make exactly the same decisions as the Cedar
-policies, for every user and every asset (DESIGN.md §6.4)."""
+policies, for every user and every asset (DESIGN.md §4)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Fact extraction for conflict detection (DESIGN.md §1.2, §5.3).
+"""Fact extraction for conflict detection (DESIGN.md §3, §4).
 
 POC simplification: one deterministic extractor for one fact type, "vacation days per
 year, per country", which is enough to show the mechanism on a real conflict in the

@@ -1,8 +1,8 @@
-"""Evaluation suite runner: the release gate (DESIGN.md §11.1).
+"""Evaluation suite runner: the release gate (DESIGN.md §8).
 
 All checks here are deterministic (retrieval, facts, permissions, behaviours), so the
 gate never depends on a model's judgement. An LLM judge for answer faithfulness
-(DESIGN.md §11.1) is not implemented in the POC.
+(DESIGN.md §8) is not implemented in the POC.
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def _content_collapses(
 ) -> list[str]:
     """Records whose content shrank below `min_ratio` of the last good release.
 
-    The "content collapse" breaker of DESIGN.md §7.4: a truncated export or a parser
+    The "content collapse" breaker of DESIGN.md §5: a truncated export or a parser
     failing on a new layout loses most of a document, while a real edit rarely does.
     Fact checks alone can miss it when the lost facts are few or not in the golden set.
     """
@@ -134,7 +134,7 @@ def run_suite(conn: psycopg.Connection, repo_name: str, release: dict) -> EvalRe
             note = ""
             if case["expect"] in changed:
                 # A legitimate update and a corruption fail this check the same way, so
-                # the system cannot excuse it; it flags it for the owner (DESIGN §11.1).
+                # the system cannot excuse it; it flags it for the owner.
                 note = " [expected record changed in this release: owner must re-confirm the fact]"
             failures.append(f"fact not found: {case['fact']!r} for {case['query']!r}{note}")
 

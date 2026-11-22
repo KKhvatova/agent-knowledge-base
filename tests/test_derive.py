@@ -1,4 +1,4 @@
-"""LLM-derived Procedure assets: provenance, invalidation and approval (DESIGN.md §1.2, §5.2)."""
+"""LLM-derived Procedure assets: provenance, invalidation and approval (DESIGN.md §3, §5)."""
 
 from __future__ import annotations
 

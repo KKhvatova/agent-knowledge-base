@@ -1,7 +1,7 @@
-"""T2 Parse and normalize: any source format -> a list of sections (DESIGN.md §4.4).
+"""T2 Parse and normalize: any source format -> a list of sections (DESIGN.md §2).
 
 Sections follow the document's own structure (headings), not fixed sizes, so each one
-is a meaningful, citable unit (DESIGN.md §5.6).
+is a meaningful, citable unit (DESIGN.md §3).
 """
 
 from __future__ import annotations

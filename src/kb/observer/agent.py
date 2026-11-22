@@ -1,4 +1,4 @@
-"""Observer agent: detect -> collect context -> diagnose -> act -> verify (DESIGN.md §8).
+"""Observer agent: detect -> collect context -> diagnose -> act -> verify (DESIGN.md §5).
 
 - Detection is deterministic (release rejected by the gate, scheduled eval regression on
   the active release, frozen source).

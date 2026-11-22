@@ -1,4 +1,4 @@
-"""MCP server: the only way agents reach the knowledge base (DESIGN.md §6).
+"""MCP server: the only way agents reach the knowledge base (DESIGN.md §4).
 
 Identity: every call carries a token that binds a user to an agent (Context Repo).
 - HTTP transport: `Authorization: Bearer <token>` header.

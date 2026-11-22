@@ -1,4 +1,4 @@
-"""The connector contract (DESIGN.md §4.1).
+"""The connector contract (DESIGN.md §2).
 
 Every source, whatever its API or format, is wrapped by a connector that implements
 the same three operations and emits the same record envelope. Nothing downstream of

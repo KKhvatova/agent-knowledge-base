@@ -1,6 +1,6 @@
 """Write data/derived/procedures.yaml: LLM-derived Procedure assets, frozen as fixtures.
 
-Pipeline step T5 (DESIGN.md §3.2) turns Knowledge assets into step-by-step Procedures.
+Pipeline step T5 (DESIGN.md §3) turns Knowledge assets into step-by-step Procedures.
 In production this runs on Claude via Bedrock. In this POC the procedures below were
 written by Claude Code during development from the current source pages, and are
 stored with the exact hash of the source version they were derived from (provenance).

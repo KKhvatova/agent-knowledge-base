@@ -1,4 +1,4 @@
-"""LLM providers for the observer's diagnosis (DESIGN.md §8.1).
+"""LLM providers for the observer's diagnosis (DESIGN.md §5).
 
 The LLM is used only to *diagnose* and *propose* an action from the allowlist. It never
 detects incidents and never executes anything. If no LLM is available, a deterministic

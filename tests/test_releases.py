@@ -1,4 +1,4 @@
-"""Context Repo releases and what agents see through them (DESIGN.md §5.5, §7.1–7.3)."""
+"""Context Repo releases and what agents see through them (DESIGN.md §1, §5)."""
 
 from __future__ import annotations
 

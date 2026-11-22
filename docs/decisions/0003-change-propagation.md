@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-11-19
-- **Design:** [DESIGN §4.2, §4.3](../DESIGN.md#4-data-connection)
+- **Design:** [DESIGN §2](../DESIGN.md#2-data-connection)
 
 ## Context
 
@@ -27,7 +27,7 @@ Processing is idempotent and ordered per record: a content hash and a permission
 
 ## Consequences
 
-- Freshness is bounded per source by its configured target, and measured end to end with canary edits (DESIGN §11.2).
+- Freshness is bounded per source by its configured target, and measured end to end with canary edits (DESIGN §8).
 - Reconciliation is also where circuit breakers act (ADR 0002).
 - Connectors stay small: all the hard logic (hashing, ordering, tombstones) lives once in the platform.
 - **In the POC:** `src/kb/connectors/` (contract and three file-based connectors), `src/kb/pipeline/sync.py`, `events.jsonl` standing in for EventBridge; `test_sync.py` (deletion found only by reconciliation, permission fast path, skip unchanged).

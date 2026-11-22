@@ -1,4 +1,4 @@
-"""Release gate and observer agent, including its guardrails (DESIGN.md §7.2, §8)."""
+"""Release gate and observer agent, including its guardrails (DESIGN.md §5)."""
 
 from __future__ import annotations
 

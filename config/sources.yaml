@@ -1,4 +1,4 @@
-# Source onboarding configuration (DESIGN.md §4.6).
+# Source onboarding configuration (DESIGN.md §2).
 # Paths are relative to the sources working copy (.data/sources by default).
 # The connector is code; everything a source owner agrees to at onboarding is here.
 #

@@ -1,4 +1,4 @@
-"""Who is asking: users and tokens (DESIGN.md §6.3).
+"""Who is asking: users and tokens (DESIGN.md §4).
 
 POC simplification: tokens are JWTs signed locally with a shared secret, and user
 attributes come from the HRIS export. In production the token would come from the
